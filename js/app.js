@@ -150,8 +150,8 @@ window.addEventListener('stroomkringen:reset', (e) => {
   history.replaceState(null, '', '#/start');
   render();
 });
-window.addEventListener('stroomkringen:gone', () => {
-  showToast('Dit profiel bestaat niet meer. Kies je profiel opnieuw.');
+window.addEventListener('stroomkringen:gone', (e) => {
+  showToast(e.detail?.reason === 'login' ? 'Je code is gewist of gewijzigd. Kies je profiel en geef je code in.' : 'Dit profiel bestaat niet meer. Kies je profiel opnieuw.');
   if (parseRoute().name !== 'leerkracht') render();
 });
 

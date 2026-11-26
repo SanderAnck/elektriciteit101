@@ -1,5 +1,5 @@
 /**
- * Stroomkringen: centrale opslag in een Google Sheet (versie 3).
+ * Stroomkringen: centrale opslag in een Google Sheet (versie 4).
  *
  * Plak deze code in Extensies > Apps Script van een NIEUWE Google Sheet,
  * vul hieronder twee eigen codes in, en implementeer als web-app
@@ -10,6 +10,9 @@
  * - De Chromebooks gebruiken de TOESTELCODE (via de koppellink).
  * - Het leerkrachtendeel gebruikt de LEERKRACHTCODE: klassen beheren,
  *   overzicht, leerlingen resetten of verwijderen, de sheet volledig wissen.
+ * - Elke leerling heeft een geheime code van 4 cijfers. Die staat niet in de
+ *   sheet en niet op de toestellen, maar versleuteld (gehasht) in de
+ *   scripteigenschappen van dit script. De leerkracht kan een code wissen.
  * Er worden alleen voornamen/bijnamen, icoontjes en sterren bewaard.
  */
 
@@ -18,7 +21,7 @@ const TOESTELCODE = 'kies-een-toestelcode';
 const LEERKRACHTCODE = 'kies-een-geheime-leerkrachtcode';
 // ▲▲▲ -------------------------------------------- ▲▲▲
 
-const VERSION = 3;
+const VERSION = 4;
 const TABS = {
   Klassen: ['Klas', 'Alle lessen vrij', 'Aangemaakt', 'klas-id'],
   Leerlingen: ['Klas', 'Leerling', 'Icoon', 'Lessen klaar', 'Sterren', 'Laatste toestel', 'Laatst gezien', 'klas-id', 'leerling-id'],
@@ -120,9 +123,48 @@ function save(db) {
   write('Voortgang', lr);
 }
 
-function summary(p) {
+function summary(p, pins) {
   const lessons = Object.keys(p.lessons).map((k) => p.lessons[k]);
-  return { id: p.id, klasId: p.klasId, name: p.name, icon: p.icon, done: lessons.length, stars: lessons.reduce((n, l) => n + l.stars, 0), lastDevice: p.lastDevice, lastSeen: p.lastSeen };
+  return { id: p.id, klasId: p.klasId, name: p.name, icon: p.icon, done: lessons.length, stars: lessons.reduce((n, l) => n + l.stars, 0), lastDevice: p.lastDevice, lastSeen: p.lastSeen, hasPin: Boolean(pins && pins['PIN_' + p.id]) };
+}
+
+// ---------- Secret codes (4 digits), only as a hash in the script properties ----------
+
+function sha(text) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8));
+}
+
+function salt() {
+  let v = props().getProperty('SALT');
+  if (!v) {
+    v = Utilities.getUuid() + Utilities.getUuid();
+    props().setProperty('SALT', v);
+  }
+  return v;
+}
+
+const validPin = (pin) => /^[0-9]{4}$/.test(String(pin || ''));
+const pinHash = (pid, pin) => sha(salt() + ':' + pid + ':' + pin);
+const getPin = (pid) => props().getProperty('PIN_' + pid);
+// A device that knows the code gets a token; it stops working when the code is wiped or changed.
+const tokenFor = (hash) => sha('token:' + hash);
+
+function setPin(pid, pin) {
+  props().setProperty('PIN_' + pid, pinHash(pid, pin));
+}
+
+function deletePins(ids) {
+  ids.forEach((pid) => props().deleteProperty('PIN_' + pid));
+}
+
+/** Too many wrong codes: wait 5 minutes. */
+function tooManyTries(pid) {
+  return Number(CacheService.getScriptCache().get('TRY_' + pid) || 0) >= 5;
+}
+
+function wrongTry(pid) {
+  const c = CacheService.getScriptCache();
+  c.put('TRY_' + pid, String(Number(c.get('TRY_' + pid) || 0) + 1), 300);
 }
 
 function classList(db) {
@@ -152,15 +194,52 @@ function deviceAction(body) {
   if (a === 'classes') return { ok: true, epoch: epoch(), classes: classList(load()) };
   if (a === 'profiles') {
     const db = load();
-    const list = Object.keys(db.pupils).map((k) => db.pupils[k]).filter((p) => p.klasId === String(body.klasId)).map(summary);
+    const pins = props().getProperties();
+    const list = Object.keys(db.pupils).map((k) => db.pupils[k]).filter((p) => p.klasId === String(body.klasId)).map((p) => summary(p, pins));
     const k = db.classes[String(body.klasId)];
     return { ok: true, epoch: epoch(), klas: k ? { id: k.id, name: k.name, unlockAll: k.unlockAll } : null, pupils: list };
   }
-  if (a === 'profile') {
+  const progressOf = (p) => Object.keys(p.lessons).map((k) => p.lessons[k]);
+  if (a === 'create') {
+    // A new profile, with its secret code.
+    if (!validPin(body.pin)) return { ok: false, error: 'Kies een code van 4 cijfers.' };
+    return withLock(() => {
+      const db = load();
+      if (!db.classes[String(body.klasId)]) return { ok: false, error: 'Deze klas bestaat niet meer.' };
+      const name = String(body.name || '').trim().slice(0, 20);
+      if (!name) return { ok: false, error: 'Vul een naam in.' };
+      const pid = 'u' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+      db.pupils[pid] = { id: pid, klasId: String(body.klasId), name: name, icon: String(body.icon || '').slice(0, 4), lastDevice: String(body.deviceName || 'Toestel').slice(0, 40), lastSeen: new Date().toISOString(), lessons: {} };
+      save(db);
+      setPin(pid, body.pin);
+      return { ok: true, pupil: summary(db.pupils[pid], { ['PIN_' + pid]: 1 }), progress: [], token: tokenFor(getPin(pid)) };
+    });
+  }
+  if (a === 'login') {
+    // Open a profile with its code. Without a code yet (or after the teacher wiped it), this code becomes the new one.
     const db = load();
-    const p = db.pupils[String(body.id)];
+    const pid = String(body.id);
+    const p = db.pupils[pid];
     if (!p) return { ok: false, gone: true, error: 'Dit profiel bestaat niet meer.' };
-    return { ok: true, pupil: summary(p), progress: Object.keys(p.lessons).map((k) => p.lessons[k]) };
+    if (!validPin(body.pin)) return { ok: false, error: 'Een code heeft 4 cijfers.' };
+    if (tooManyTries(pid)) return { ok: false, wrongPin: true, error: 'Te veel foute codes. Wacht 5 minuten of vraag het aan je leerkracht.' };
+    const stored = getPin(pid);
+    if (!stored) setPin(pid, body.pin);
+    else if (stored !== pinHash(pid, body.pin)) {
+      wrongTry(pid);
+      return { ok: false, wrongPin: true, error: 'Die code klopt niet.' };
+    }
+    return { ok: true, pupil: summary(p, { ['PIN_' + pid]: 1 }), progress: progressOf(p), token: tokenFor(getPin(pid)) };
+  }
+  if (a === 'profile') {
+    // Logged in on this device: the token proves the code was given.
+    const db = load();
+    const pid = String(body.id);
+    const p = db.pupils[pid];
+    if (!p) return { ok: false, gone: true, error: 'Dit profiel bestaat niet meer.' };
+    const stored = getPin(pid);
+    if (!stored || body.token !== tokenFor(stored)) return { ok: false, needLogin: true, error: 'Geef je code opnieuw in.' };
+    return { ok: true, pupil: summary(p, { ['PIN_' + pid]: 1 }), progress: progressOf(p) };
   }
   if (a === 'sync') {
     return withLock(() => {
@@ -169,10 +248,10 @@ function deviceAction(body) {
       const now = new Date().toISOString();
       (body.ops || []).slice(0, 500).forEach((op) => {
         const pid = String(op.profileId);
-        if (op.op === 'create' && db.classes[String(op.klasId)] && !db.pupils[pid]) {
-          db.pupils[pid] = { id: pid, klasId: String(op.klasId), name: String(op.name).slice(0, 20), icon: String(op.icon || '').slice(0, 4), lastDevice: deviceName, lastSeen: now, lessons: {} };
+        if (op.op === 'delete') {
+          delete db.pupils[pid];
+          deletePins([pid]);
         }
-        if (op.op === 'delete') delete db.pupils[pid];
         if (op.op === 'reset' && db.pupils[pid]) db.pupils[pid].lessons = {};
       });
       const gone = [];
@@ -207,9 +286,10 @@ function teacherAction(body) {
   if (a === 'teacherPing') return { ok: true, version: VERSION, epoch: epoch() };
   if (a === 'overview') {
     const db = load();
+    const pins = props().getProperties();
     const pupils = Object.keys(db.pupils).map((k) => {
       const p = db.pupils[k];
-      const s = summary(p);
+      const s = summary(p, pins);
       s.lessons = {};
       Object.keys(p.lessons).forEach((n) => (s.lessons[n] = p.lessons[n].stars));
       return s;
@@ -231,14 +311,23 @@ function teacherAction(body) {
     } else if (a === 'deleteClass') {
       const kid = String(body.id);
       delete db.classes[kid];
-      Object.keys(db.pupils).forEach((k) => { if (db.pupils[k].klasId === kid) delete db.pupils[k]; });
+      Object.keys(db.pupils).forEach((k) => {
+        if (db.pupils[k].klasId === kid) {
+          delete db.pupils[k];
+          deletePins([k]);
+        }
+      });
     } else if (a === 'resetPupil') {
       if (db.pupils[String(body.id)]) db.pupils[String(body.id)].lessons = {};
+    } else if (a === 'resetPin') {
+      deletePins([String(body.id)]);
     } else if (a === 'deletePupil') {
       delete db.pupils[String(body.id)];
+      deletePins([String(body.id)]);
     } else if (a === 'wipe') {
       db.classes = {};
       db.pupils = {};
+      deletePins(props().getKeys().filter((k) => k.indexOf('PIN_') === 0).map((k) => k.slice(4)));
       props().setProperty('EPOCH', newEpoch());
     } else {
       return { ok: false, error: 'Onbekende vraag.' };
