@@ -15,7 +15,7 @@ import { explainHtml } from './circuit/explain.js';
 import { sanitize, emptyCircuit, clone } from './circuit/model.js';
 import { playSuccess, playOops, playClick } from './sound.js';
 import {
-  isConnected, connect, disconnect, syncNow, linkFor, parseLink, listClasses, chooseClass, listClassProfiles, openRemoteProfile,
+  isConnected, connect, disconnect, syncNow, linkFor, parseLink, listClasses, chooseClass, listClassProfiles, openRemoteProfile, createRemoteProfile,
   teacherLogin, teacherLoggedIn, teacherLogout, teacher,
 } from './cloud.js';
 
@@ -29,7 +29,28 @@ const starsHtml = (n, max = 3) =>
 
 // ---------- Profiles ----------
 
-async function newProfileDialog() {
+const PIN_FIELD = (label) => `<label class="field"><span class="field__label">${esc(label)}</span>
+  <input class="input input--pin" data-pin type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••"></label>`;
+const readPin = (w) => {
+  const v = w.querySelector('[data-pin]').value.trim();
+  return /^\d{4}$/.test(v) ? v : null;
+};
+
+/** Ask the secret code of a profile. */
+function pinDialog(p, isNew) {
+  return modal({
+    title: `${p.icon || ''} ${p.name}`.trim(),
+    body: `${isNew ? '<p>Je hebt nog geen geheime code. Kies er nu een van 4 cijfers en onthoud die goed.</p>' : ''}
+      ${PIN_FIELD(isNew ? 'Kies je geheime code' : 'Geef je geheime code')}
+      <p class="field__error" hidden>Een code heeft 4 cijfers.</p>`,
+    actions: [
+      { label: 'Annuleren', value: null, kind: 'ghost' },
+      { label: 'Open', kind: 'primary', value: (w) => readPin(w) || (w.querySelector('.field__error').hidden = false, undefined) },
+    ],
+  });
+}
+
+async function newProfileDialog({ withPin = false } = {}) {
   let icon = PROFILE_ICONS[Math.floor(Math.random() * PROFILE_ICONS.length)];
   const res = await modal({
     title: 'Nieuw profiel',
@@ -37,6 +58,7 @@ async function newProfileDialog() {
         <input class="input" maxlength="20" autocomplete="off" placeholder="bv. Lotte"></label>
       <div class="field__label">Kies een icoontje</div>
       <div class="icon-pick">${PROFILE_ICONS.map((i) => `<button type="button" class="icon-pick__btn${i === icon ? ' is-on' : ''}" data-icon="${i}">${i}</button>`).join('')}</div>
+      ${withPin ? `${PIN_FIELD('Kies een geheime code van 4 cijfers')}<p class="muted small">Zo kan niemand anders je profiel openen. Vergeten? Je leerkracht kan de code wissen.</p>` : ''}
       <p class="field__error" hidden>Vul een naam in.</p>`,
     actions: [
       { label: 'Annuleren', value: null, kind: 'ghost' },
@@ -44,8 +66,11 @@ async function newProfileDialog() {
         label: 'Maak profiel', kind: 'primary',
         value: (w) => {
           const name = w.querySelector('input').value.trim();
-          if (!name) { w.querySelector('.field__error').hidden = false; return undefined; }
-          return { name, icon };
+          const err = w.querySelector('.field__error');
+          if (!name) { err.textContent = 'Vul een naam in.'; err.hidden = false; return undefined; }
+          const pin = withPin ? readPin(w) : null;
+          if (withPin && !pin) { err.textContent = 'Kies een code van 4 cijfers.'; err.hidden = false; return undefined; }
+          return { name, icon, pin };
         },
       },
     ],
@@ -59,7 +84,13 @@ async function newProfileDialog() {
     },
   });
   if (!res) return null;
-  return createProfile(res.name, res.icon);
+  if (!withPin) return createProfile(res.name, res.icon);
+  try {
+    return await createRemoteProfile(res);
+  } catch (err) {
+    showToast(err.message || 'Geen verbinding.');
+    return null;
+  }
 }
 
 async function profilePicker(page, ctx, { title = 'Wie ben jij?' } = {}) {
@@ -131,15 +162,10 @@ async function classPicker(page, ctx, { title }) {
     pupils = await listClassProfiles();
   } catch (err) {
     if (!(await getSettings()).cloudKlas) return go('#/profielen');
-    // Offline: only the copy on this device can be used.
-    const local = (await listProfiles()).filter((p) => p.klasId === klas.id);
-    offline(err, local.length ? `<p class="muted">Zonder verbinding kan je verder met:</p><div class="profiles">${local.map((p) => profileTile(p)).join('')}</div>` : '');
-    list.onclick = async (e) => {
-      const b = e.target.closest('[data-id]');
-      if (!b) return;
-      await saveSettings({ currentProfile: b.dataset.id });
-      go('#/start');
-    };
+    // Offline: only the pupil who is logged in on this device can go on.
+    const me = ctx.profile;
+    offline(err, me ? `<p class="muted">Zonder verbinding kan je verder als:</p><div class="profiles">${profileTile(me, true)}</div>` : '');
+    list.onclick = (e) => { if (e.target.closest('[data-id]')) go('#/start'); };
     return;
   }
   pupils.sort((a, b) => String(a.name).localeCompare(String(b.name), 'nl'));
@@ -149,14 +175,17 @@ async function classPicker(page, ctx, { title }) {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.new !== undefined) {
-      const p = await newProfileDialog();
+      const p = await newProfileDialog({ withPin: true });
       if (p) go('#/start');
       return;
     }
     playClick();
+    const who = pupils.find((x) => x.id === b.dataset.id);
+    const pin = await pinDialog(who, !who.hasPin);
+    if (!pin) return;
     b.disabled = true;
     try {
-      const p = await openRemoteProfile(b.dataset.id);
+      const p = await openRemoteProfile(b.dataset.id, pin);
       showToast(`Hoi ${p.name}!`);
       go('#/start');
     } catch (err) {
@@ -741,7 +770,8 @@ function pupilsCardHtml(classes, pupils) {
         ${LESSONS.map((l) => { const st = Number(p.lessons?.[l.id]) || 0; return `<td class="cell${st ? ' is-done' : ''}">${st ? '★'.repeat(st) : '·'}</td>`; }).join('')}
         <td class="tot">${Number(p.stars) || 0}</td>
         <td class="muted small" title="${esc(p.lastDevice || '')}">${esc(when(p.lastSeen))}${p.lastDevice ? `<br>${esc(p.lastDevice)}` : ''}</td>
-        <td class="row-actions"><button type="button" class="btn btn--small btn--ghost" data-pupil-reset="${esc(p.id)}">Reset</button>
+        <td class="row-actions">${p.hasPin ? `<button type="button" class="btn btn--small btn--ghost" data-pupil-pin="${esc(p.id)}" title="De leerling kiest daarna een nieuwe code">Code wissen</button>` : '<span class="muted small pin-none">geen code</span>'}
+        <button type="button" class="btn btn--small btn--ghost" data-pupil-reset="${esc(p.id)}">Reset</button>
         <button type="button" class="btn btn--small btn--ghost" data-pupil-delete="${esc(p.id)}">Verwijder</button></td></tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">Nog geen leerlingen in deze klas. Ze maken hun profiel aan op een gekoppelde Chromebook.</p>'}
   </section>`;
@@ -868,6 +898,9 @@ async function teacherCloud(page, ctx) {
       if (await confirmModal(`Klas ${c.name} verwijderen?`, `De klas en alle ${c.pupils} profielen met hun sterren worden uit de Google Sheet gewist. Toestellen van deze klas beginnen opnieuw.`, 'Verwijder')) {
         await act('deleteClass', { id: c.id }, `Klas ${c.name} is verwijderd.`);
       }
+    } else if (d.pupilPin) {
+      const p = pupil(d.pupilPin);
+      if (await confirmModal(`Code van ${p.name} wissen?`, `${p.name} wordt op elk toestel afgemeld en kiest bij het volgende openen een nieuwe code. De sterren blijven.`, 'Wis code', 'primary')) await act('resetPin', { id: p.id }, `De code van ${p.name} is gewist.`);
     } else if (d.pupilReset) {
       const p = pupil(d.pupilReset);
       if (await confirmModal(`Voortgang van ${p.name} resetten?`, 'Alle sterren en lessen van deze leerling worden gewist, op elk toestel.', 'Reset')) await act('resetPupil', { id: p.id }, `${p.name} begint opnieuw.`);

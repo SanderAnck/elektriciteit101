@@ -11,7 +11,7 @@ import { db } from './db.js';
 import { getSettings, saveSettings } from './store.js';
 import { LESSONS } from './lessons/lessons.js';
 
-export const MIN_VERSION = 3;
+export const MIN_VERSION = 4;
 
 /** Connected = linked to a version 3 script (older links are ignored). */
 export const isConnected = (s) => Boolean(s.cloudUrl && s.cloudCode && s.cloudEpoch);
@@ -78,6 +78,8 @@ async function ask(action, extra = {}) {
   if (!data.ok) {
     const err = new Error(data.error || 'Er ging iets mis.');
     err.gone = Boolean(data.gone);
+    err.wrongPin = Boolean(data.wrongPin);
+    err.needLogin = Boolean(data.needLogin);
     throw err;
   }
   return data;
@@ -146,16 +148,33 @@ export async function listClassProfiles() {
   return res.pupils || [];
 }
 
-/** Work as this pupil on this device: fetch the profile and its progress. */
-export async function openRemoteProfile(id) {
-  const res = await ask('profile', { id });
+/**
+ * Work as this pupil on this device: check the secret code in the sheet and
+ * fetch the profile and its progress. The code itself is never stored here;
+ * the device only keeps a token that stops working when the teacher wipes the code.
+ */
+export async function openRemoteProfile(id, pin) {
+  const res = await ask('login', { id, pin });
+  await useProfile(res);
+  return res.pupil;
+}
+
+/** A new profile in the class of this device, made directly in the sheet. */
+export async function createRemoteProfile({ name, icon, pin }) {
+  const s = await getSettings();
+  if (!s.cloudKlas) throw new Error('Kies eerst je klas.');
+  const res = await ask('create', { klasId: s.cloudKlas.id, name, icon, pin, deviceName: s.deviceName || 'Toestel' });
+  await useProfile(res);
+  return res.pupil;
+}
+
+async function useProfile(res) {
   const p = res.pupil;
   const existing = await db.get('profiles', p.id);
-  await db.put('profiles', { ...(existing || { createdAt: new Date().toISOString() }), id: p.id, name: p.name, icon: p.icon, klasId: p.klasId });
+  await db.put('profiles', { ...(existing || { createdAt: new Date().toISOString() }), id: p.id, name: p.name, icon: p.icon, klasId: p.klasId, token: res.token });
   await replaceProgress(p.id, res.progress || []);
   await saveSettings({ currentProfile: p.id });
   pruneOthers();
-  return p;
 }
 
 /** Make the local copy equal to the sheet, but keep results that were not sent yet. */
@@ -300,16 +319,16 @@ export async function pullProgress(profileId, { force = false } = {}) {
     if (s.cloudDirty) await syncNow();
     if ((await getSettings()).currentProfile !== profileId) return true; // removed by the sync
     if ((await getSettings()).cloudDirty) return klasChanged;
-    const res = await ask('profile', { id: profileId });
+    const res = await ask('profile', { id: profileId, token: (await db.get('profiles', profileId))?.token });
     const klasId = (await getSettings()).cloudKlas?.id;
     if (klasId && res.pupil.klasId !== klasId) throw Object.assign(new Error('Andere klas'), { gone: true });
     return (await replaceProgress(profileId, res.progress || [])) || klasChanged;
   } catch (err) {
     if (err instanceof ResetError) return true;
-    if (err.gone) {
+    if (err.gone || err.needLogin) {
       await removeLocalProfile(profileId);
       await saveSettings({ currentProfile: null });
-      emit('gone', { id: profileId });
+      emit('gone', { id: profileId, reason: err.needLogin ? 'login' : 'gone' });
       return true;
     }
     return false;

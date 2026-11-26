@@ -1,4 +1,4 @@
-# Centrale opslag in Google Drive (versie 3)
+# Centrale opslag in Google Drive (versie 4)
 
 Met deze koppeling staan alle **klassen, leerlingprofielen en sterren** in één Google Sheet
 in jouw Drive. De Chromebooks houden enkel een tijdelijke kopie bij van de leerling die er
@@ -67,6 +67,16 @@ De leerling kiest daarna zijn profiel uit de lijst van zijn klas, of maakt een n
 profiel. Werkt hij morgen op een andere Chromebook, dan kiest hij daar gewoon dezelfde
 naam: de sterren komen mee uit de sheet.
 
+## Geheime code per leerling
+
+Bij een nieuw profiel kiest de leerling een geheime code van 4 cijfers. Die code is nodig om
+het profiel te openen, op elke Chromebook. De code staat **niet** in de sheet en **niet** op
+de toestellen: het script bewaart ze versleuteld (gehasht) in zijn eigen scripteigenschappen
+en controleert ze zelf. Na 5 foute codes moet je 5 minuten wachten.
+
+Code vergeten? Leerkrachtendeel → **Voortgang** → **Code wissen** bij die leerling. Hij wordt
+op elk toestel afgemeld en kiest bij het volgende openen een nieuwe code. De sterren blijven.
+
 ## 7. Beheer en overzicht
 
 In het leerkrachtendeel:
@@ -99,6 +109,12 @@ vanzelf als nieuw. Daarna maak je je klassen opnieuw aan.
    bij *Versie* kies **Nieuwe versie** → **Implementeren**.
    Zo blijft de URL dezelfde en hoef je de Chromebooks niet opnieuw te koppelen.
    (Kies dus niet "Nieuwe implementatie": dat geeft een nieuwe URL.)
+
+## Van versie 3 naar 4 (geheime codes)
+
+Volg *Het script bijwerken* hierboven: zelfde sheet, zelfde URL, kies **Nieuwe versie**.
+Je klassen en sterren blijven. Bestaande profielen hebben nog geen code: de leerling kiest
+er een de eerstvolgende keer dat hij zijn profiel opent.
 
 ## Van versie 2 naar 3
 
