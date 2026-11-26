@@ -94,6 +94,7 @@ export const allOpen = (settings) => Boolean(settings.cloudEpoch ? settings.clou
 
 export function isUnlocked(lessonId, progress, settings) {
   if (allOpen(settings)) return true;
+  if (progress[lessonId]?.done) return true; // a finished lesson stays open
   const i = LESSONS.findIndex((l) => l.id === Number(lessonId));
   return i <= 0 || Boolean(progress[LESSONS[i - 1].id]?.done);
 }

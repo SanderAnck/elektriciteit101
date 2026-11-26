@@ -83,7 +83,8 @@ class UnionFind {
  *         controls: { id: bool } (override switch/button state),
  *         open: Set<id> (treat part as removed), closed: Set<id> (treat as a wire) }
  * Returns { parts: { id: { level, ratio, current, reason, short? } },
- *           wires: { id: { current, hot } }, short, shortParts: [ids], overload: [ids that burn out], anyCurrent }
+ *           wires: { id: { current, hot } }, short, shortParts: [ids], overload: [ids that burn out],
+ *           blown: [fuses that melt], anyCurrent }
  */
 export function simulate(circuit, opts = {}) {
   const index = new Map();
@@ -148,7 +149,7 @@ export function simulate(circuit, opts = {}) {
     if (conductance(p, opts) >= G_WIRE * 0.99) uf.union(...two(p));
   }
 
-  const res = { parts: {}, wires: {}, short: false, shortParts: [], overload: [], anyCurrent: false };
+  const res = { parts: {}, wires: {}, short: false, shortParts: [], overload: [], blown: [], anyCurrent: false };
   for (const p of parts) {
     const [i, j] = two(p);
     const dv = V[i] - V[j];
@@ -180,6 +181,9 @@ export function simulate(circuit, opts = {}) {
         else out.reason = 'open';
       }
     }
+    // Too much current through a fuse: its thin wire melts and the circuit opens.
+    if (def.fuse && Math.abs(I) > def.maxI) { out.blown = true; res.blown.push(p.id); }
+    if (def.fuse && p.broken) out.reason = 'gesprongen';
     res.parts[p.id] = out;
   }
   for (const w of wires) {

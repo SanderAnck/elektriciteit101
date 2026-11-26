@@ -397,11 +397,14 @@ export class Editor {
     const c = this.circuit;
     let sim = simulate(c, { pressed: this.pressed });
     // Too much current: those lamps and LEDs burn out for good (until replaced).
-    if (sim.overload.length) {
-      for (const id of sim.overload) { const p = this.part(id); if (p) p.broken = true; }
+    // A fuse melts first: it protects the battery and the wires.
+    for (let round = 0; round < 3; round++) {
+      const gone = sim.blown.length ? sim.blown : sim.overload;
+      if (!gone.length) break;
+      for (const id of gone) { const p = this.part(id); if (p) p.broken = true; }
       // Part of the same step: undo goes back to before the wire that burnt it.
       this.history.replace(c);
-      this.opts.onBurn?.(sim.overload);
+      this.opts.onBurn?.(gone);
       sim = simulate(c, { pressed: this.pressed });
     }
     this.sim = sim;

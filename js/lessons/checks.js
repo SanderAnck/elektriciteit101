@@ -11,7 +11,15 @@
 //   { rule: 'en', part: 'lamp', by: 'switch' }        works only when ALL `by` parts are on (at least 2)
 //   { rule: 'of', part: 'lamp', by: ['switch','button'] }  works when ONE of the `by` parts is on (at least 2)
 //   { rule: 'testplek', part: 'material', with: 'lamp' }   a material sits in the circuit of the lamp
-// A short circuit, or a lamp or LED that would burn out, in any switch position always fails the check.
+//   { rule: 'helderheid', part: 'lamp', level: 'zwak' }    the working ones burn 'zwak' or 'fel' (fel = fel or heelfel)
+//   { rule: 'eigen', part: 'lamp', by: 'switch', count: 2 }  each of `count` parts has its own control that turns only it off
+//   { rule: 'altijd', part: 'led' }                   works in every position of the switches and buttons
+//   { rule: 'omgekeerd', part: 'buzzer', by: 'switch' }  works when `by` is OFF and stops when `by` is ON
+//   { rule: 'tweestanden', part: 'motor', by: 'button', uit: 'zwak', aan: 'fel' }  level with `by` off / on
+//   { rule: 'gemengd', part: 'lamp' }                 three of them: one in the main path, two side by side after it
+//   { rule: 'beschermd', part: 'lamp' }                a fuse in the circuit of the part melts when there is a short circuit
+// A short circuit, or a lamp or LED that would burn out, in any switch position always fails the check,
+// unless a fuse melts in that position (then the circuit is protected).
 // Every rule may carry its own `fout` text, shown when it is not met.
 
 import { simulate, isOn } from '../circuit/sim.js';
@@ -53,6 +61,17 @@ const word = (part, many = false) => (PART_WORDS[part] || ['het onderdeel', 'de 
 
 function working(circuit, sim, part) {
   return circuit.parts.filter((p) => matches(p, part) && isOn(sim, p.id));
+}
+
+const LEVEL_WORDS = { uit: 'uit', zwak: 'zwak', fel: 'fel' };
+const levelIs = (lv, want) => (want === 'fel' ? lv === 'fel' || lv === 'heelfel' : lv === want);
+const levelWord = (part, lv) => (part === 'motor' ? { uit: 'stil', zwak: 'traag', fel: 'snel' } : part === 'buzzer' ? { uit: 'stil', zwak: 'zacht', fel: 'luid' } : LEVEL_WORDS)[lv] || lv;
+const workVerb = (part, many) => (part === 'motor' ? (many ? 'draaien' : 'draait') : part === 'buzzer' ? (many ? 'zoemen' : 'zoemt') : many ? 'branden' : 'brandt');
+
+/** A copy of the circuit with every melted fuse replaced, so checks see the design. */
+function withFreshFuses(c) {
+  if (!c.parts.some((p) => p.type === 'fuse' && p.broken)) return c;
+  return { ...c, parts: c.parts.map((p) => (p.type === 'fuse' && p.broken ? { ...p, broken: false } : p)) };
 }
 
 const RULES = {
@@ -142,6 +161,117 @@ const RULES = {
   },
 };
 
+Object.assign(RULES, {
+  helderheid(c, r) {
+    const sim = simulate(c, { controls: allSet(c, true) });
+    const on = working(c, sim, r.part);
+    if (!on.length) return RULES.aan(c, r);
+    const bad = on.filter((p) => !levelIs(sim.parts[p.id].level, r.level));
+    if (!bad.length) return null;
+    const many = on.length > 1;
+    if (r.level === 'zwak') return `${cap(word(r.part, many))} ${workVerb(r.part, many)} nog te fel. Remt iets de stroom af?`;
+    return `${cap(word(r.part, many))} ${workVerb(r.part, many)} nog niet ${levelWord(r.part, r.level)} genoeg.`;
+  },
+
+  eigen(c, r) {
+    const count = r.count || 2;
+    const sim = simulate(c, { controls: allSet(c, true) });
+    const on = working(c, sim, r.part);
+    if (on.length < count) return RULES.aan(c, { ...r, count });
+    const ctrl = controlsOf(c, r.by);
+    if (ctrl.length < count) return `Gebruik ${count} schakelaars: voor elk${r.part === 'lamp' ? ' lampje' : ''} één.`;
+    const mine = on.filter((p) => ctrl.some((s) => {
+      const controls = allSet(c, true);
+      controls[s.id] = false;
+      const off = simulate(c, { controls });
+      return !isOn(off, p.id) && on.every((q) => q === p || isOn(off, q.id));
+    }));
+    if (mine.length >= count) return null;
+    return `Nog niet elk${r.part === 'lamp' ? ' lampje' : ''} heeft een eigen schakelaar. Zet je een schakelaar uit, dan mag alleen ${word(r.part)} van die schakelaar uitgaan.`;
+  },
+
+  altijd(c, r) {
+    const count = r.count || 1;
+    for (const controls of combos(c)) {
+      const sim = simulate(c, { controls });
+      if (working(c, sim, r.part).length < count) {
+        const s0 = simulate(c, { controls: allSet(c, true) });
+        if (working(c, s0, r.part).length < count) return RULES.aan(c, { ...r, count });
+        return `${cap(word(r.part, count > 1))} ${count > 1 ? 'moeten' : 'moet'} altijd werken, ook als je een schakelaar of knop uit zet. Geef ${count > 1 ? 'ze' : r.part === 'lamp' ? 'het' : 'hem'} een eigen weg naar de batterij, zonder schakelaar.`;
+      }
+    }
+    return null;
+  },
+
+  omgekeerd(c, r) {
+    const by = controlsOf(c, r.by);
+    const byName = r.by === 'button' ? 'drukknop' : 'schakelaar';
+    if (!by.length) return `Gebruik een ${byName}.`;
+    const ids = by.map((p) => p.id);
+    const onSim = simulate(c, { controls: allSet(c, true) });
+    const offSim = simulate(c, { controls: allSet(c, false, ids) });
+    const worksOff = working(c, offSim, r.part);
+    if (!worksOff.length) return `Als de ${byName} uit staat, moet ${word(r.part)} werken. Nu werkt ${word(r.part)} dan niet.`;
+    if (worksOff.some((p) => !isOn(onSim, p.id))) return null;
+    return `${cap(word(r.part))} blijft werken als de ${byName} aan staat. De ${byName} moet de stroom een makkelijkere weg geven, rond ${word(r.part)}.`;
+  },
+
+  tweestanden(c, r) {
+    const by = controlsOf(c, r.by);
+    const byName = r.by === 'button' ? 'drukknop' : 'schakelaar';
+    if (!by.length) return `Gebruik een ${byName}.`;
+    const ids = by.map((p) => p.id);
+    const onSim = simulate(c, { controls: allSet(c, true) });
+    const offSim = simulate(c, { controls: allSet(c, false, ids) });
+    const parts = c.parts.filter((p) => matches(p, r.part));
+    if (!parts.length) return RULES.aan(c, r);
+    const good = parts.filter((p) => levelIs(offSim.parts[p.id]?.level, r.uit) && levelIs(onSim.parts[p.id]?.level, r.aan));
+    if (good.length) return null;
+    const p = parts[0];
+    const inf = r.part === 'motor' ? 'draaien' : r.part === 'buzzer' ? 'zoemen' : 'branden';
+    if (!levelIs(offSim.parts[p.id]?.level, r.uit)) return `Als de ${byName} uit staat, moet ${word(r.part)} ${levelWord(r.part, r.uit)} ${r.uit === 'uit' ? 'zijn' : inf}.`;
+    return `Als de ${byName} aan staat, moet ${word(r.part)} ${levelWord(r.part, r.aan)} ${inf}.`;
+  },
+
+  gemengd(c, r) {
+    const sim = simulate(c, { controls: allSet(c, true) });
+    const on = working(c, sim, r.part);
+    if (on.length < 3) return RULES.aan(c, { ...r, count: 3 });
+    const without = (a) => simulate(c, { controls: allSet(c, true), open: new Set([a.id]) });
+    const main = on.find((a) => { const s2 = without(a); return on.every((b) => b === a || !isOn(s2, b.id)); });
+    if (!main) return 'Eén lampje moet op de hoofdweg staan: haal je het weg, dan gaan alle lampjes uit.';
+    const rest = on.filter((p) => p !== main);
+    const sideBySide = rest.every((a) => { const s2 = without(a); return rest.every((b) => b === a || isOn(s2, b.id)); });
+    if (!sideBySide) return 'De twee andere lampjes moeten naast elkaar staan, elk met een eigen weg, na het eerste lampje.';
+    return null;
+  },
+
+  beschermd(c, r) {
+    const fuses = c.parts.filter((p) => p.type === 'fuse');
+    if (!fuses.length) return 'Zet een zekering in je kring.';
+    const fresh = withFreshFuses(c);
+    const fuseIds = new Set(fuses.map((f) => f.id));
+    let shorted = false;
+    for (const controls of combos(fresh)) {
+      const s2 = simulate(fresh, { controls });
+      if (!s2.short) continue;
+      shorted = true;
+      if (!s2.blown.length) return 'Bij kortsluiting gaat de stroom niet door de zekering. Zet de zekering vlak bij de batterij, zodat ALLE stroom erdoor moet.';
+    }
+    if (!shorted) return 'Maak een drukknop die kortsluiting maakt (een weg rond het lampje), zodat je de zekering kan testen.';
+    const ok = combos(fresh).some((controls) => {
+      const s2 = simulate(fresh, { controls });
+      if (s2.short) return false;
+      const lit = working(fresh, s2, r.part);
+      const noFuse = simulate(fresh, { controls, open: fuseIds });
+      return lit.length && lit.every((p) => !isOn(noFuse, p.id));
+    });
+    if (!ok) return `${cap(word(r.part))} moet branden zolang er geen kortsluiting is, en de zekering moet in dezelfde kring staan.`;
+    if (c.parts.some((p) => p.type === 'fuse' && p.broken)) return 'Je kring is goed! Maar de zekering is nog gesprongen: klik erop en kies “Nieuw”.';
+    return null;
+  },
+});
+
 function logic(c, r, by, want, message) {
   // Try every on/off state of the `by` controls, others stay on.
   for (let m = 0; m < 1 << Math.min(by.length, 6); m++) {
@@ -165,8 +295,11 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  * Returns { ok, message }.
  */
 export function checkStep(circuit, step, answers = {}) {
-  for (const controls of combos(circuit)) {
-    const s = simulate(circuit, { controls });
+  for (const controls of combos(withFreshFuses(circuit))) {
+    const s = simulate(withFreshFuses(circuit), { controls });
+    if (s.short && s.blown.length) continue; // a fuse melts: protected
+    if (s.short && circuit.parts.some((p) => p.type === 'fuse'))
+      return { ok: false, message: 'Er is kortsluiting, maar de stroom gaat niet door de zekering. Zet de zekering vlak bij de batterij, zodat ALLE stroom erdoor moet.' };
     if (s.short)
       return { ok: false, message: 'Er is kortsluiting! De stroom gaat dan rechtstreeks van + naar −. Haal die draad weg.' };
     if (s.overload.length) {

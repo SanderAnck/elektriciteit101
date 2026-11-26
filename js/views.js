@@ -6,7 +6,7 @@ import {
   getSettings, saveSettings, listProfiles, createProfile, deleteProfile, getProgress, saveLessonResult, resetProgress,
   isUnlocked, allOpen, totals, getDraft, saveDraft, deleteDraft, listCircuits, saveCircuit, PROFILE_ICONS, reloadSettings,
 } from './store.js';
-import { LESSONS, lessonById } from './lessons/lessons.js';
+import { LESSONS, BLOCKS, lessonById } from './lessons/lessons.js';
 import { checkStep, starsFor } from './lessons/checks.js';
 import { mountWorkspace, statusText, ICON } from './workspace.js';
 import { partIcon } from './circuit/draw.js';
@@ -216,7 +216,7 @@ const start = {
           <a class="choice choice--lessons" href="#/opdrachten">
             <div class="choice__art">${partIcon('switch', { on: true })}${partIcon('buzzer')}${partIcon('led', { on: true })}</div>
             <div class="choice__title">Opdrachten</div>
-            <div class="choice__text">${LESSONS.length} lessen van makkelijk naar moeilijk.</div>
+            <div class="choice__text">${LESSONS.length} lessen in drie blokken: makkelijk, gemiddeld en moeilijk.</div>
             <div class="choice__meta">${t.done} van ${t.max} lessen · <span class="star is-on">★</span> ${t.stars}</div>
           </a>
         </div>
@@ -374,35 +374,55 @@ const zandbak = {
 
 // ---------- Lessons overview ----------
 
+let shownBlock = null; // block tab chosen on the lessons screen
+
 const opdrachten = {
   title: 'Opdrachten',
   nav: 'opdrachten',
   needsProfile: true,
   async mount(page, ctx) {
     const t = totals(ctx.progress);
-    page.innerHTML = `
-      <div class="lessons-page">
-        <div class="lessons-head">
-          <h1 class="page-title">Opdrachten</h1>
-          <div class="lessons-total">${t.done} van ${t.max} lessen · <span class="star is-on">★</span> ${t.stars} van ${t.max * 3}</div>
-        </div>
-        <div class="lesson-grid">
-          ${LESSONS.map((l, i) => {
-            const rec = ctx.progress[l.id];
-            const open = isUnlocked(l.id, ctx.progress, ctx.settings);
-            const next = open && !rec?.done && (i === 0 || ctx.progress[LESSONS[i - 1].id]?.done || allOpen(ctx.settings));
-            return `<a class="lesson-card${open ? '' : ' is-locked'}${rec?.done ? ' is-done' : ''}${next ? ' is-next' : ''}" ${open ? `href="#/les/${l.id}"` : 'aria-disabled="true"'}>
-                <span class="lesson-card__num">${l.id}</span>
-                <span class="lesson-card__art">${partIcon(l.icon, { on: Boolean(rec?.done) })}</span>
-                <span class="lesson-card__title">${esc(l.title)}</span>
-                <span class="lesson-card__foot">${open ? (rec?.done ? starsHtml(rec.stars) : next ? '<span class="tag tag--accent">Start</span>' : starsHtml(0)) : `<span class="lock">🔒 Eerst les ${LESSONS[i - 1].id}</span>`}</span>
-              </a>`;
-          }).join('')}
-        </div>
-      </div>`;
-    page.querySelector('.lesson-grid').addEventListener('click', (e) => {
+    const card = (l) => {
+      const i = LESSONS.indexOf(l);
+      const rec = ctx.progress[l.id];
+      const open = isUnlocked(l.id, ctx.progress, ctx.settings);
+      const next = open && !rec?.done && (i === 0 || ctx.progress[LESSONS[i - 1].id]?.done || allOpen(ctx.settings));
+      return `<a class="lesson-card${open ? '' : ' is-locked'}${rec?.done ? ' is-done' : ''}${next ? ' is-next' : ''}" ${open ? `href="#/les/${l.id}"` : 'aria-disabled="true"'}>
+          <span class="lesson-card__num">${l.nr}</span>
+          <span class="lesson-card__art">${partIcon(l.icon, { on: Boolean(rec?.done) })}</span>
+          <span class="lesson-card__title">${esc(l.title)}</span>
+          <span class="lesson-card__foot">${open ? (rec?.done ? starsHtml(rec.stars) : next ? '<span class="tag tag--accent">Start</span>' : starsHtml(0)) : `<span class="lock">🔒 Eerst les ${LESSONS[i - 1].nr}</span>`}</span>
+        </a>`;
+    };
+    // Open the block with the next lesson to do.
+    const firstOpen = LESSONS.find((l) => !ctx.progress[l.id]?.done) || LESSONS[LESSONS.length - 1];
+    if (!BLOCKS.some((b) => b.key === shownBlock)) shownBlock = firstOpen.block;
+    const draw = () => {
+      const block = BLOCKS.find((b) => b.key === shownBlock);
+      page.innerHTML = `
+        <div class="lessons-page">
+          <div class="lessons-head">
+            <h1 class="page-title">Opdrachten</h1>
+            <div class="lessons-total">${t.done} van ${t.max} lessen · <span class="star is-on">★</span> ${t.stars} van ${t.max * 3}</div>
+          </div>
+          <div class="block-tabs" role="tablist">
+            ${BLOCKS.map((b) => {
+              const ls = LESSONS.filter((l) => l.block === b.key);
+              const done = ls.filter((l) => ctx.progress[l.id]?.done).length;
+              return `<button type="button" role="tab" class="block-tab block-tab--${b.key}${b.key === shownBlock ? ' is-on' : ''}" aria-selected="${b.key === shownBlock}" data-block="${b.key}">
+                <span class="block-tab__title">${b.icon} ${esc(b.title)}</span><span class="block-tab__count">${done} / ${ls.length}${done === ls.length ? ' ✔' : ''}</span></button>`;
+            }).join('')}
+          </div>
+          <p class="block-intro">${esc(block.intro)}</p>
+          <div class="lesson-grid lesson-grid--block">${LESSONS.filter((l) => l.block === block.key).map(card).join('')}</div>
+        </div>`;
+    };
+    draw();
+    page.onclick = (e) => {
+      const tab = e.target.closest('[data-block]');
+      if (tab) { shownBlock = tab.dataset.block; playClick(); draw(); return; }
       if (e.target.closest('.is-locked')) showToast('Deze les komt vrij als je de vorige les af hebt.');
-    });
+    };
   },
 };
 
@@ -436,7 +456,7 @@ const les = {
       showToast('Deze les is nog op slot.');
       return go('#/opdrachten');
     }
-    document.title = `Les ${lesson.id}: ${lesson.title} · Stroomkringen`;
+    document.title = `Les ${lesson.nr}: ${lesson.title} · Stroomkringen`;
     const place = `les${lesson.id}`;
     const draft = await getDraft(ctx.profile.id, place);
     const state = { step: draft?.step || 0, fails: draft?.fails || 0, hints: 0, shownHints: draft?.shownHints || 0, totalHints: draft?.totalHints || 0, answers: draft?.answers || {}, feedback: null };
@@ -459,7 +479,7 @@ const les = {
       const hintsLeft = step.hints.length - state.shownHints;
       return `
         <div class="panel__section lesson-panel">
-          <div class="lesson-panel__eyebrow">Les ${lesson.id}${lesson.steps.length > 1 ? ` · stap ${state.step + 1} van ${lesson.steps.length}` : ''}</div>
+          <div class="lesson-panel__eyebrow">Les ${lesson.nr} · ${esc(BLOCKS.find((b) => b.key === lesson.block).title)}${lesson.steps.length > 1 ? ` · stap ${state.step + 1} van ${lesson.steps.length}` : ''}</div>
           <h2 class="panel__title">${esc(lesson.title)}</h2>
           <div class="goal"><span class="goal__icon" aria-hidden="true">🎯</span><div><div class="goal__label">Doel</div>${esc(step.goal)}</div></div>
           ${qs.map((q, i) => questionHtml(q, i, state.answers)).join('')}
@@ -568,7 +588,7 @@ const les = {
 
     function intro() {
       return modal({
-        title: `Les ${lesson.id}: ${lesson.title}`,
+        title: `Les ${lesson.nr}: ${lesson.title}`,
         body: `<div class="intro-art">${partIcon(lesson.icon, { on: true })}</div>
           <p class="intro-text">${esc(lesson.intro)}</p>
           <div class="goal"><span class="goal__icon" aria-hidden="true">🎯</span><div><div class="goal__label">Doel</div>${esc(lesson.steps[state.step].goal)}</div></div>`,
@@ -641,7 +661,7 @@ const leerkracht = {
           <section class="card">
             <h2 class="card__title">Voortgang op dit toestel</h2>
             ${profiles.length ? `<div class="table-wrap"><table class="progress-table">
-              <thead><tr><th>Leerling</th>${LESSONS.map((l) => `<th title="${esc(l.title)}">${l.id}</th>`).join('')}<th>★</th><th></th></tr></thead>
+              <thead><tr><th>Leerling</th>${LESSONS.map((l) => `<th class="th-${l.block}" title="${esc(l.title)}">${l.nr}</th>`).join('')}<th>★</th><th></th></tr></thead>
               <tbody>${profiles.map((p) => {
                 const t = totals(Object.fromEntries(all.filter((r) => r.profileId === p.id).map((r) => [r.lessonId, r])));
                 return `<tr><td class="who">${esc(p.icon)} ${esc(p.name)}</td>
@@ -765,7 +785,7 @@ function pupilsCardHtml(classes, pupils) {
       </div>
     </div>
     ${mine.length ? `<div class="table-wrap"><table class="progress-table">
-      <thead><tr><th>Leerling</th>${LESSONS.map((l) => `<th title="${esc(l.title)}">${l.id}</th>`).join('')}<th>★</th><th>Laatst gezien</th><th></th></tr></thead>
+      <thead><tr><th>Leerling</th>${LESSONS.map((l) => `<th class="th-${l.block}" title="${esc(l.title)}">${l.nr}</th>`).join('')}<th>★</th><th>Laatst gezien</th><th></th></tr></thead>
       <tbody>${mine.map((p) => `<tr><td class="who">${esc(p.icon)} ${esc(p.name)}</td>
         ${LESSONS.map((l) => { const st = Number(p.lessons?.[l.id]) || 0; return `<td class="cell${st ? ' is-done' : ''}">${st ? '★'.repeat(st) : '·'}</td>`; }).join('')}
         <td class="tot">${Number(p.stars) || 0}</td>

@@ -65,6 +65,11 @@ check: [{ rule: 'bediend', part: 'lamp', by: 'switch' }]   // schakelaar bedient
 check: [{ rule: 'serie', part: 'lamp', count: 2 }]         // twee lampjes in serie
 ```
 
+Er zijn 30 lessen in drie blokken van 10: **makkelijk**, **gemiddeld** en **moeilijk**
+(`BLOCKS` onderaan `lessons.js`). Het `id` van een les verandert nooit, want de voortgang hangt
+eraan; de volgorde staat in `BLOCKS`. `tests/lessons.test.mjs` lost elke les op met een
+voorbeeldoplossing en controleert dat een typische fout niet slaagt.
+
 De controle gebeurt met de simulatie: elke juiste oplossing telt, ongeacht de tekening.
 Sterren: 3 zonder fout en zonder hint, 2 bij hoogstens 2 fouten/hints samen, anders 1.
 
@@ -72,7 +77,8 @@ Sterren: 3 zonder fout en zonder hint, 2 bij hoogstens 2 fouten/hints samen, and
 
 De lessen werken rond de stroomkring (open/gesloten), schakelaar en drukknop, serie- en
 parallelschakeling, de richting van de stroom (LED), geleiders en isolatoren, en veilig
-omgaan met elektriciteit (kortsluiting, stopcontact). Per les staat in `eindterm` waar ze
+omgaan met elektriciteit (kortsluiting, zekering, stopcontact), weerstanden, bronnen in
+serie, gemengde schakelingen en eenvoudige technische systemen (alarm, verkeerslicht). Per les staat in `eindterm` waar ze
 bij aansluit.
 
 ## Leerkrachtendeel
