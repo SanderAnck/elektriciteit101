@@ -217,3 +217,27 @@ test('strong batteries: a lamp burns out, lamps in series or a resistor protect 
   assert.equal(checkStep(safe, les.steps[1]).ok, true);
   assert.equal(checkStep(bare, les.steps[1]).ok, false);
 });
+
+test('the burn-out facts in the explanations match the simulation', () => {
+  const chain = (variant, nLamps, type = 'lamp') => {
+    const bat = P('battery', variant ? { variant } : {});
+    const lamps = Array.from({ length: nLamps }, () => P(type));
+    const t = (l, side) => (type === 'led' ? (side === 'in' ? 'pos' : 'neg') : side === 'in' ? 'a' : 'b');
+    const wires = [W(bat, 'pos', lamps[0], t(lamps[0], 'in'))];
+    for (let i = 1; i < lamps.length; i++) wires.push(W(lamps[i - 1], t(lamps[i - 1], 'out'), lamps[i], t(lamps[i], 'in')));
+    wires.push(W(lamps.at(-1), t(lamps.at(-1), 'out'), bat, 'neg'));
+    return simulate({ parts: [bat, ...lamps], wires }).overload.length > 0;
+  };
+  const twoAA = () => {
+    const a = P('battery'); const b = P('battery'); const l = P('lamp');
+    return simulate({ parts: [a, b, l], wires: [W(a, 'pos', b, 'neg'), W(b, 'pos', l, 'a'), W(l, 'b', a, 'neg')] });
+  };
+  assert.equal(chain(null, 1), false); // 1,5 V: fine
+  const s = twoAA();
+  assert.equal(s.overload.length, 0); // 3 V: extra bright, no burn
+  assert.equal(chain('plat', 1), true); // 4,5 V: one lamp burns
+  assert.equal(chain('plat', 2), false); // two in series survive
+  assert.equal(chain('blok', 2), true); // 9 V: two burn
+  assert.equal(chain('blok', 3), false); // three in series survive
+  assert.equal(chain('plat', 1, 'led'), true);
+});

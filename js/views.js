@@ -11,6 +11,7 @@ import { checkStep, starsFor } from './lessons/checks.js';
 import { mountWorkspace, statusText, ICON } from './workspace.js';
 import { partIcon } from './circuit/draw.js';
 import { partName, partInfo, keyOf } from './circuit/parts.js';
+import { explainHtml } from './circuit/explain.js';
 import { sanitize, emptyCircuit, clone } from './circuit/model.js';
 import { playSuccess, playOops, playClick } from './sound.js';
 
@@ -147,7 +148,7 @@ function sandboxPanel(part, sim) {
       <div class="panel__part">${partIcon(keyOf(part), { on: sim?.parts[part.id]?.level !== 'uit' && part.type !== 'battery' })}</div>
       <h2 class="panel__title">${esc(partName(part))}</h2>
       <p class="panel__text">${esc(partInfo(part))}</p>
-      <p class="panel__status">${esc(statusText(part, sim))}</p>
+      ${explainHtml(part, sim, esc)}
     </div>`;
 }
 
@@ -331,6 +332,9 @@ const les = {
     const startCircuit = () => sanitize(lesson.start ? clone(lesson.start) : emptyCircuit());
     let saveTimer = null;
     let ws = null;
+    let selectedId = null;
+    let lastExplain = '';
+    const selectedPart = () => (selectedId && ws?.editor.part(selectedId)) || null;
     const persist = () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
@@ -350,13 +354,20 @@ const les = {
           ${qs.map((q, i) => questionHtml(q, i, state.answers)).join('')}
           ${state.feedback ? `<div class="feedback feedback--${state.feedback.ok ? 'good' : 'bad'}" role="status"><span aria-hidden="true">${state.feedback.ok ? '✔' : '✖'}</span> ${esc(state.feedback.message)}</div>` : ''}
           ${state.shownHints ? `<ol class="hints">${step.hints.slice(0, state.shownHints).map((h) => `<li>${esc(h)}</li>`).join('')}</ol>` : ''}
+          ${selectedPart() ? `<div class="lesson-explain"><h3 class="panel__sub">${esc(partName(selectedPart()))}</h3>${explainHtml(selectedPart(), ws.sim, esc)}</div>` : '<p class="lesson-tip">Tip: klik op een onderdeel om te zien waarom het werkt of niet werkt.</p>'}
         </div>
         <div class="lesson-panel__actions">
           <button type="button" class="btn btn--ghost" data-hint ${hintsLeft ? '' : 'disabled'}>💡 Hint${hintsLeft ? ` (${hintsLeft})` : ''}</button>
           <button type="button" class="btn btn--primary btn--big" data-check>Controleer</button>
         </div>`;
     };
-    const renderPanel = () => { ws.els.panel.innerHTML = panel(); };
+    const renderPanel = () => {
+      const scroll = ws.els.panel.scrollTop;
+      ws.els.panel.innerHTML = panel();
+      ws.els.panel.scrollTop = scroll;
+      const sel = selectedPart();
+      lastExplain = sel ? explainHtml(sel, ws.sim, esc) : '';
+    };
 
     ws = mountWorkspace(page, {
       toolbox: lesson.toolbox,
@@ -368,9 +379,16 @@ const les = {
       onBack: () => go('#/opdrachten'),
       onSetting: (patch) => saveSettings(patch),
       onChange: () => {
-        if (state.feedback && !state.feedback.ok) { state.feedback = null; ws && renderPanel(); }
+        if (!ws) return;
+        const sel = selectedPart();
+        const key = sel ? explainHtml(sel, ws.sim, esc) : '';
+        if ((state.feedback && !state.feedback.ok) || key !== lastExplain) {
+          if (state.feedback && !state.feedback.ok) state.feedback = null;
+          renderPanel();
+        }
         persist();
       },
+      onSelect: (part) => { selectedId = part?.id || null; renderPanel(); },
       onClear: async () => {
         if (await confirmModal('Opnieuw beginnen?', 'Je schakeling verdwijnt en je begint deze stap opnieuw.', 'Begin opnieuw')) ws.editor.setCircuit(startCircuit());
       },

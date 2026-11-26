@@ -23,6 +23,7 @@ const SHELL = [
   'js/circuit/sim.js',
   'js/circuit/draw.js',
   'js/circuit/editor.js',
+  'js/circuit/explain.js',
   'js/lessons/lessons.js',
   'js/lessons/checks.js',
   'icons/icon-192.png',
