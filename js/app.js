@@ -2,7 +2,7 @@
 
 import { views } from './views.js';
 import { requestPersistentStorage } from './db.js';
-import { getSettings, saveSettings, currentProfile, getProgress, setChangeHook } from './store.js';
+import { getSettings, saveSettings, currentProfile, getProgress, setChangeHook, isUnlocked } from './store.js';
 import { scheduleSync, startAutoSync, pullProgress } from './cloud.js';
 import { showToast, modal, hideTip } from './ui.js';
 import { setSoundEnabled, setBuzzer } from './sound.js';
@@ -30,8 +30,21 @@ async function render() {
   const progress = profile ? await getProgress(profile.id) : {};
   if (id !== renderId) return;
   // Progress from other devices: fetch in the background and refresh overview screens.
+  // Also picks up class settings: lessons opened or locked by the teacher.
   if (profile && (name === 'start' || name === 'opdrachten')) {
     pullProgress(profile.id).then((changed) => { if (changed && id === renderId) render(); });
+  }
+  // Opening a lesson: check again, and send the pupil back when it is locked now.
+  if (profile && name === 'les') {
+    pullProgress(profile.id, { force: true }).then(async (changed) => {
+      if (!changed || id !== renderId) return;
+      const s = await getSettings();
+      const p = await currentProfile();
+      if (!p || !isUnlocked(param, await getProgress(p.id), s)) {
+        showToast('Deze les is nog niet vrij.');
+        location.hash = '#/opdrachten';
+      }
+    });
   }
   const view = views[name];
 
@@ -117,6 +130,17 @@ document.getElementById('help-btn').addEventListener('click', () =>
 );
 
 window.addEventListener('hashchange', render);
+
+// While a pupil looks at the overview screens, check the class settings now and then.
+const refreshOverview = () => {
+  const { name } = parseRoute();
+  if (document.visibilityState === 'visible' && (name === 'start' || name === 'opdrachten')) {
+    const id = renderId;
+    currentProfile().then((p) => p && pullProgress(p.id).then((changed) => { if (changed && id === renderId) render(); }));
+  }
+};
+setInterval(refreshOverview, 30000);
+document.addEventListener('visibilitychange', refreshOverview);
 
 // The sheet decides: after a wipe, a removed class or a removed profile this device follows.
 window.addEventListener('stroomkringen:reset', (e) => {

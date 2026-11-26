@@ -270,6 +270,21 @@ export function startAutoSync() {
 
 let lastPull = 0;
 
+/** Fetch the class settings again (the teacher may have opened or locked the lessons). Returns true when they changed. */
+async function refreshKlas() {
+  const s = await getSettings();
+  if (!s.cloudKlas) return false;
+  const k = (await listClasses()).find((c) => c.id === s.cloudKlas.id);
+  if (!k) {
+    await startOver(null, 'class');
+    return true;
+  }
+  const klas = { id: k.id, name: k.name, unlockAll: Boolean(k.unlockAll) };
+  if (klas.name === s.cloudKlas.name && klas.unlockAll === Boolean(s.cloudKlas.unlockAll)) return false;
+  await saveSettings({ cloudKlas: klas });
+  return true;
+}
+
 /**
  * Bring the local copy of this pupil up to date with the sheet (work on other
  * devices, resets by the teacher). Returns true when something changed.
@@ -277,16 +292,18 @@ let lastPull = 0;
 export async function pullProgress(profileId, { force = false } = {}) {
   const s = await getSettings();
   if (!isConnected(s) || !navigator.onLine) return false;
-  if (!force && Date.now() - lastPull < 20000) return false;
+  if (!force && Date.now() - lastPull < 5000) return false;
   lastPull = Date.now();
   try {
+    const klasChanged = await refreshKlas();
+    if (!(await getSettings()).cloudKlas) return true; // class removed
     if (s.cloudDirty) await syncNow();
     if ((await getSettings()).currentProfile !== profileId) return true; // removed by the sync
-    if ((await getSettings()).cloudDirty) return false;
+    if ((await getSettings()).cloudDirty) return klasChanged;
     const res = await ask('profile', { id: profileId });
     const klasId = (await getSettings()).cloudKlas?.id;
     if (klasId && res.pupil.klasId !== klasId) throw Object.assign(new Error('Andere klas'), { gone: true });
-    return await replaceProgress(profileId, res.progress || []);
+    return (await replaceProgress(profileId, res.progress || [])) || klasChanged;
   } catch (err) {
     if (err instanceof ResetError) return true;
     if (err.gone) {
