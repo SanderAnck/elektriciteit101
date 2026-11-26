@@ -18,6 +18,8 @@ geen account, geen tracking. Gemaakt voor laptops en Chromebooks in liggende sta
 | `js/app.js` | Hash-router (`#/start`, `#/zandbak`, `#/opdrachten`, `#/les/3`, `#/leerkracht`), topbalk, service worker |
 | `js/views.js` | Schermen: start, profielen, zandbak, opdrachten, les, leerkrachtendeel |
 | `js/workspace.js` | Werkscherm: knoppenbalk, gereedschapskist, werkblad, zijpaneel, sneltoetsen |
+| `js/cloud.js` | Optionele centrale opslag in een Google Sheet |
+| `google/` | Apps Script voor de Google Sheet en de handleiding `KOPPELING.md` |
 | `js/store.js` | Instellingen, leerlingprofielen, voortgang, opgeslagen schakelingen |
 | `js/db.js` | IndexedDB-opslag plus export/import (back-up) |
 | `js/ui.js` | Meldingen, dialoogvensters, tooltip, bestanden |
@@ -78,6 +80,11 @@ bij aansluit.
 Via het hoedje rechtsboven. Standaardcode: **1234** (te wijzigen in het leerkrachtendeel).
 Daar zie je de voortgang per leerling, geef je alle lessen vrij, reset je voortgang en
 maak je een back-up (export/import als bestand).
+
+## Centrale opslag (optioneel)
+
+Standaard blijft alles op het toestel. Wil je de voortgang van alle Chromebooks centraal
+zien, koppel dan een Google Sheet: zie [`google/KOPPELING.md`](google/KOPPELING.md).
 
 ## Lokaal testen
 

@@ -15,6 +15,7 @@ const SHELL = [
   'js/views.js',
   'js/workspace.js',
   'js/store.js',
+  'js/cloud.js',
   'js/db.js',
   'js/ui.js',
   'js/sound.js',

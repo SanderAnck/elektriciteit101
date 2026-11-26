@@ -14,6 +14,7 @@ import { partName, partInfo, keyOf } from './circuit/parts.js';
 import { explainHtml } from './circuit/explain.js';
 import { sanitize, emptyCircuit, clone } from './circuit/model.js';
 import { playSuccess, playOops, playClick } from './sound.js';
+import { isConnected, testConnection, syncNow, fetchOverview, linkFor, parseLink, scheduleSync } from './cloud.js';
 
 // Navigate; re-render when we are already on that address.
 const go = (hash) => {
@@ -476,6 +477,69 @@ const les = {
 
 // ---------- Teacher ----------
 
+function cloudSettingsHtml(s) {
+  const on = isConnected(s);
+  const last = s.cloudLastSync ? new Date(s.cloudLastSync).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'nog nooit';
+  return `<section class="card">
+    <h2 class="card__title">Centrale opslag (Google Drive)</h2>
+    <p class="muted small">Stuur de voortgang van dit toestel naar jouw Google Sheet. Hoe je die maakt, staat in <a href="https://github.com/SanderAnck/elektriciteit101/blob/main/google/KOPPELING.md" target="_blank" rel="noopener">de handleiding</a>.</p>
+    <label class="field"><span class="field__label">Adres van de web-app</span><input class="input input--small" name="cloudUrl" value="${esc(s.cloudUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label class="field"><span class="field__label">Klascode</span><input class="input input--small" name="cloudCode" value="${esc(s.cloudCode || '')}" autocomplete="off"></label>
+    <label class="field"><span class="field__label">Naam van dit toestel</span><input class="input input--small" name="deviceName" value="${esc(s.deviceName || '')}" placeholder="bv. Chromebook 7"></label>
+    <div class="btn-col">
+      <button type="button" class="btn btn--primary" data-cloud-save>${on ? 'Opslaan en testen' : 'Koppelen'}</button>
+      ${on ? `<button type="button" class="btn" data-cloud-sync>Nu versturen</button>
+      <button type="button" class="btn" data-cloud-link>Koppellink voor andere toestellen</button>` : ''}
+    </div>
+    ${on ? `<p class="muted small">Laatst verstuurd: ${esc(last)}${s.cloudDirty ? ' · er wacht nog iets' : ''}${s.cloudError ? ` · <span class="text-bad">${esc(s.cloudError)}</span>` : ''}</p>` : ''}
+  </section>`;
+}
+
+function cloudOverviewHtml(s) {
+  if (!isConnected(s)) return '';
+  return `<section class="card">
+    <h2 class="card__title">Alle toestellen</h2>
+    <div class="cloud-fetch">
+      <input class="input input--small" type="password" name="cloudTeacherCode" value="${esc(s.cloudTeacherCode || '')}" placeholder="Leerkrachtcode uit het script" autocomplete="off">
+      <button type="button" class="btn btn--primary" data-cloud-fetch>Gegevens ophalen</button>
+    </div>
+    <div class="cloud-overview"><p class="muted small">Haal de voortgang op van alle gekoppelde Chromebooks.</p></div>
+  </section>`;
+}
+
+function overviewTable(pupils) {
+  if (!pupils.length) return '<p class="muted">Er is nog niets binnengekomen.</p>';
+  pupils.sort((a, b) => String(a.deviceName).localeCompare(String(b.deviceName), 'nl') || String(a.name).localeCompare(String(b.name), 'nl'));
+  const when = (iso) => (iso ? new Date(iso).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+  return `<div class="table-wrap"><table class="progress-table">
+    <thead><tr><th>Toestel</th><th>Leerling</th>${LESSONS.map((l) => `<th title="${esc(l.title)}">${l.id}</th>`).join('')}<th>★</th><th>Laatst gezien</th></tr></thead>
+    <tbody>${pupils.map((p) => `<tr><td>${esc(p.deviceName)}</td><td class="who">${esc(p.icon)} ${esc(p.name)}</td>
+      ${LESSONS.map((l) => { const st = Number(p.lessons?.[l.id]) || 0; return `<td class="cell${st ? ' is-done' : ''}">${st ? '★'.repeat(st) : '·'}</td>`; }).join('')}
+      <td class="tot">${Number(p.stars) || 0}</td><td class="muted">${esc(when(p.lastSeen))}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// One-click setup on a Chromebook: #/koppel/<code from the teacher's link>
+const koppel = {
+  title: 'Koppelen',
+  nav: 'leerkracht',
+  async mount(page, ctx) {
+    const cfg = parseLink(ctx.param || '');
+    if (!cfg) { showToast('Deze koppellink is niet geldig.'); return go('#/start'); }
+    const name = await promptModal('Toestel koppelen', { label: 'Geef dit toestel een naam, zodat je het herkent', value: ctx.settings.deviceName || '', placeholder: 'bv. Chromebook 7', okLabel: 'Koppel' });
+    if (name === null) return go('#/start');
+    try {
+      await testConnection(cfg.cloudUrl, cfg.cloudCode);
+      await saveSettings({ ...cfg, deviceName: name.trim() || 'Toestel', cloudDirty: true });
+      await syncNow();
+      showToast('Dit toestel is gekoppeld.');
+    } catch (err) {
+      showToast(`Koppelen lukte niet: ${err.message}`);
+    }
+    history.replaceState(null, '', '#/start');
+    go('#/start');
+  },
+};
+
 let teacherOk = false;
 
 const leerkracht = {
@@ -501,6 +565,7 @@ const leerkracht = {
           <a class="btn btn--ghost" href="#/start">Sluiten</a>
         </div>
         <div class="teacher__grid">
+          <div class="teacher__col">
           <section class="card">
             <h2 class="card__title">Voortgang op dit toestel</h2>
             ${profiles.length ? `<div class="table-wrap"><table class="progress-table">
@@ -514,6 +579,9 @@ const leerkracht = {
                   <button type="button" class="btn btn--small btn--ghost" data-delete="${p.id}">Verwijder</button></td></tr>`;
               }).join('')}</tbody></table></div>` : '<p class="muted">Er zijn nog geen leerlingprofielen op dit toestel.</p>'}
           </section>
+          ${cloudOverviewHtml(ctx.settings)}
+          </div>
+          <div class="teacher__col">
           <section class="card">
             <h2 class="card__title">Instellingen</h2>
             <label class="switch-row"><input type="checkbox" data-unlock ${ctx.settings.unlockAll ? 'checked' : ''}><span>Alle lessen vrijgeven</span></label>
@@ -525,8 +593,10 @@ const leerkracht = {
               <button type="button" class="btn" data-code>Code wijzigen</button>
               <button type="button" class="btn btn--danger" data-reset-all>Voortgang van iedereen resetten</button>
             </div>
-            <p class="muted small">Versie ${esc(self.APP_VERSION)} · Alle gegevens blijven op dit toestel.</p>
+            <p class="muted small">Versie ${esc(self.APP_VERSION)} · ${isConnected(ctx.settings) ? 'Voortgang wordt ook centraal bewaard.' : 'Alle gegevens blijven op dit toestel.'}</p>
           </section>
+          ${cloudSettingsHtml(ctx.settings)}
+          </div>
         </div>
       </div>`;
     const reload = () => views.leerkracht.mount(page, { ...ctx, settings: { ...ctx.settings } });
@@ -556,11 +626,53 @@ const leerkracht = {
           if (!(await confirmModal('Back-up importeren?', 'Alle gegevens op dit toestel worden vervangen door die uit het bestand.', 'Importeer'))) return;
           await db.importAll(f);
           reloadSettings();
+          scheduleSync();
           ctx.settings = await getSettings();
           showToast('Back-up geïmporteerd.');
           reload();
         } catch (err) {
           showToast(err.message);
+        }
+      } else if (b.matches('[data-cloud-save]')) {
+        const url = page.querySelector('[name="cloudUrl"]').value.trim();
+        const code = page.querySelector('[name="cloudCode"]').value.trim();
+        const deviceName = page.querySelector('[name="deviceName"]').value.trim();
+        if (!url && !code) {
+          ctx.settings = await saveSettings({ cloudUrl: '', cloudCode: '', deviceName });
+          showToast('Centrale opslag staat uit.');
+          return reload();
+        }
+        b.disabled = true;
+        try {
+          await testConnection(url, code);
+          ctx.settings = await saveSettings({ cloudUrl: url, cloudCode: code, deviceName, cloudDirty: true });
+          await syncNow();
+          showToast('Gekoppeld! De voortgang van dit toestel is verstuurd.');
+          reload();
+        } catch (err) {
+          showToast(err.message || 'Geen verbinding.');
+          b.disabled = false;
+        }
+      } else if (b.matches('[data-cloud-sync]')) {
+        b.disabled = true;
+        const ok = await syncNow();
+        ctx.settings = await getSettings();
+        showToast(ok ? 'Verstuurd!' : `Niet gelukt: ${ctx.settings.cloudError}`);
+        reload();
+      } else if (b.matches('[data-cloud-link]')) {
+        const link = linkFor(ctx.settings);
+        try { await navigator.clipboard.writeText(link); showToast('Koppellink gekopieerd. Open hem op elke Chromebook.'); }
+        catch { await modal({ title: 'Koppellink', body: `<p>Open deze link op elke Chromebook:</p><input class="input" readonly value="${esc(link)}">`, actions: [{ label: 'Sluiten', value: true, kind: 'primary' }] }); }
+      } else if (b.matches('[data-cloud-fetch]')) {
+        const tcode = page.querySelector('[name="cloudTeacherCode"]').value.trim();
+        const out = page.querySelector('.cloud-overview');
+        out.innerHTML = '<p class="muted">Bezig met ophalen…</p>';
+        try {
+          const pupils = await fetchOverview(ctx.settings.cloudUrl, tcode);
+          ctx.settings = await saveSettings({ cloudTeacherCode: tcode });
+          out.innerHTML = overviewTable(pupils);
+        } catch (err) {
+          out.innerHTML = `<p class="feedback feedback--bad">${esc(err.message || 'Geen verbinding.')}</p>`;
         }
       } else if (b.matches('[data-code]')) {
         const code = await promptModal('Nieuwe code', { label: 'Kies een nieuwe code voor het leerkrachtendeel', okLabel: 'Bewaar' });
@@ -570,4 +682,4 @@ const leerkracht = {
   },
 };
 
-export const views = { start, profielen, zandbak, opdrachten, les, leerkracht };
+export const views = { start, profielen, zandbak, opdrachten, les, leerkracht, koppel };

@@ -482,7 +482,7 @@ a.lesson-card[href]:hover { transform: translateY(-3px); border-color: var(--acc
 
 .teacher { max-width: 1280px; margin: 0 auto; padding: 24px; }
 .teacher__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.teacher__grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.teacher__grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .card__title { font-size: var(--fs-l); font-weight: 800; margin-bottom: 12px; }
 .table-wrap { overflow-x: auto; }
@@ -497,6 +497,12 @@ a.lesson-card[href]:hover { transform: translateY(-3px); border-color: var(--acc
 .switch-row input { width: 22px; height: 22px; accent-color: var(--accent); }
 .divider { border: 0; height: 1px; background: var(--line); margin: 16px 0; }
 .btn-col { display: flex; flex-direction: column; gap: 8px; }
+.teacher__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.input--small { min-height: 40px; font-size: var(--fs-m); }
+.cloud-fetch { display: flex; gap: 8px; margin-bottom: 12px; max-width: 520px; }
+.cloud-fetch .btn { white-space: nowrap; }
+.progress-table td:first-child { text-align: left; }
+.text-bad { color: var(--bad); font-weight: 650; }
 
 /* ---------- Tooltip, toast ---------- */
 

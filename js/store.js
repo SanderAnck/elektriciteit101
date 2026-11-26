@@ -7,8 +7,20 @@ const DEFAULTS = { id: 'app', sound: true, dots: true, unlockAll: false, current
 
 let cache = null;
 
+// Called after progress or profiles change (used for central storage).
+let changeHook = null;
+export const setChangeHook = (fn) => { changeHook = fn; };
+const changed = () => changeHook?.();
+
 export async function getSettings() {
-  if (!cache) cache = { ...DEFAULTS, ...((await db.get('settings', 'app')) || {}) };
+  if (!cache) {
+    cache = { ...DEFAULTS, ...((await db.get('settings', 'app')) || {}) };
+    if (!cache.deviceId) {
+      // A random id per device, so the teacher can tell Chromebooks apart.
+      cache.deviceId = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+      await db.put('settings', cache);
+    }
+  }
   return cache;
 }
 
@@ -36,6 +48,7 @@ export async function createProfile(name, icon) {
   const p = { id: `u${Date.now().toString(36)}`, name: name.trim().slice(0, 20), icon, createdAt: new Date().toISOString() };
   await db.put('profiles', p);
   await saveSettings({ currentProfile: p.id });
+  changed();
   return p;
 }
 
@@ -46,6 +59,7 @@ export async function deleteProfile(id) {
   await db.delete('profiles', id);
   const s = await getSettings();
   if (s.currentProfile === id) await saveSettings({ currentProfile: null });
+  changed();
 }
 
 /** Progress of one pupil: { lessonId: record }. */
@@ -60,12 +74,14 @@ export async function saveLessonResult(profileId, lessonId, { stars, fails, hint
   const old = (await db.get('progress', id)) || {};
   const rec = { id, profileId, lessonId, done: true, stars: Math.max(old.stars || 0, stars), fails, hints, doneAt: new Date().toISOString() };
   await db.put('progress', rec);
+  changed();
   return rec;
 }
 
 export async function resetProgress(profileId) {
   for (const r of await db.getAll('progress')) if (!profileId || r.profileId === profileId) await db.delete('progress', r.id);
   for (const d of await db.getAll('drafts')) if (d.id.includes(':les') && (!profileId || d.id.startsWith(`${profileId}:`))) await db.delete('drafts', d.id);
+  changed();
 }
 
 export function isUnlocked(lessonId, progress, settings) {
