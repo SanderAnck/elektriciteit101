@@ -201,6 +201,9 @@ body.is-work .view { overflow: hidden; }
 .profile-tile.is-current { border-color: var(--accent); background: var(--accent-soft); }
 .profile-tile__icon { font-size: 3rem; line-height: 1; }
 .profile-tile__name { font-weight: 700; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-tile__meta { font-size: var(--fs-xs); color: var(--text-2); font-weight: 600; }
+.find-profile { margin-top: 24px; }
+.profiles--remote { margin-top: 12px; }
 .profile-tile--new { border-style: dashed; color: var(--accent); background: transparent; box-shadow: none; }
 .profile-tile--new .profile-tile__icon { font-size: 2.4rem; font-weight: 300; }
 

@@ -3,7 +3,7 @@
 import { views } from './views.js';
 import { requestPersistentStorage } from './db.js';
 import { getSettings, saveSettings, currentProfile, getProgress, setChangeHook } from './store.js';
-import { scheduleSync, startAutoSync } from './cloud.js';
+import { scheduleSync, startAutoSync, pullProgress } from './cloud.js';
 import { showToast, modal, hideTip } from './ui.js';
 import { setSoundEnabled, setBuzzer } from './sound.js';
 
@@ -29,6 +29,10 @@ async function render() {
   }
   const progress = profile ? await getProgress(profile.id) : {};
   if (id !== renderId) return;
+  // Progress from other devices: fetch in the background and refresh overview screens.
+  if (profile && (name === 'start' || name === 'opdrachten')) {
+    pullProgress(profile.id).then((changed) => { if (changed && id === renderId) render(); });
+  }
   const view = views[name];
 
   if (cleanup) { try { cleanup(); } catch (err) { console.warn(err); } cleanup = null; }
@@ -129,7 +133,7 @@ async function registerServiceWorker() {
 }
 
 if (!location.hash) history.replaceState(null, '', `#/${DEFAULT_ROUTE}`);
-setChangeHook(() => scheduleSync());
+setChangeHook((change) => scheduleSync(change));
 startAutoSync();
 render();
 registerServiceWorker().catch((err) => console.warn('Service worker failed', err));

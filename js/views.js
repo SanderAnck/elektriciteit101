@@ -14,7 +14,7 @@ import { partName, partInfo, keyOf } from './circuit/parts.js';
 import { explainHtml } from './circuit/explain.js';
 import { sanitize, emptyCircuit, clone } from './circuit/model.js';
 import { playSuccess, playOops, playClick } from './sound.js';
-import { isConnected, testConnection, syncNow, fetchOverview, linkFor, parseLink, scheduleSync } from './cloud.js';
+import { isConnected, testConnection, syncNow, fetchOverview, linkFor, parseLink, scheduleSync, listRemoteProfiles, importRemoteProfile, pullProgress } from './cloud.js';
 
 // Navigate; re-render when we are already on that address.
 const go = (hash) => {
@@ -70,6 +70,7 @@ async function profilePicker(page, ctx, { title = 'Wie ben jij?' } = {}) {
             <span class="profile-tile__icon">${esc(p.icon)}</span><span class="profile-tile__name">${esc(p.name)}</span></button>`).join('')}
         <button type="button" class="profile-tile profile-tile--new" data-new><span class="profile-tile__icon">＋</span><span class="profile-tile__name">Nieuw profiel</span></button>
       </div>
+      ${isConnected(ctx.settings) ? '<button type="button" class="btn btn--ghost find-profile" data-find>🔎 Mijn profiel staat op een ander toestel</button>' : ''}
     </div>`;
   page.querySelector('.profiles').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
@@ -81,8 +82,45 @@ async function profilePicker(page, ctx, { title = 'Wie ben jij?' } = {}) {
     }
     await saveSettings({ currentProfile: b.dataset.id });
     playClick();
-    go('#/start');
+    pullProgress(b.dataset.id, { force: true }).finally(() => go('#/start'));
   });
+  page.querySelector('[data-find]')?.addEventListener('click', () => findRemoteProfile(profiles));
+}
+
+/** Pick a profile that was made on another (connected) device. */
+async function findRemoteProfile(localProfiles) {
+  let remote;
+  showToast('Profielen ophalen…');
+  try {
+    remote = await listRemoteProfiles();
+  } catch (err) {
+    return showToast(err.message || 'Geen verbinding.');
+  }
+  const local = new Set(localProfiles.map((p) => p.id));
+  const others = remote.filter((p) => !local.has(p.id)).sort((a, b) => String(a.name).localeCompare(String(b.name), 'nl'));
+  const id = await modal({
+    title: 'Zoek je profiel',
+    wide: true,
+    body: others.length
+      ? `<p class="muted">Klik op je naam. Je sterren komen mee naar dit toestel.</p>
+         <div class="profiles profiles--remote">${others.map((p) => `<button type="button" class="profile-tile" data-remote="${esc(p.id)}">
+           <span class="profile-tile__icon">${esc(p.icon)}</span><span class="profile-tile__name">${esc(p.name)}</span>
+           <span class="profile-tile__meta">★ ${Number(p.stars) || 0}${p.lastDevice ? ` · ${esc(p.lastDevice)}` : ''}</span></button>`).join('')}</div>`
+      : '<p class="muted">Er zijn geen andere profielen gevonden. Is je profiel al eens verstuurd vanaf het andere toestel?</p>',
+    actions: [{ label: 'Annuleren', value: null, kind: 'ghost' }],
+    onMount: (w, close) => w.querySelector('.modal__body').addEventListener('click', (e) => {
+      const t = e.target.closest('[data-remote]');
+      if (t) close(t.dataset.remote);
+    }),
+  });
+  if (!id) return;
+  try {
+    const p = await importRemoteProfile(id);
+    showToast(`Welkom terug, ${p.name}!`);
+    go('#/start');
+  } catch (err) {
+    showToast(err.message || 'Ophalen lukte niet.');
+  }
 }
 
 // ---------- Start ----------
@@ -512,7 +550,7 @@ function overviewTable(pupils) {
   pupils.sort((a, b) => String(a.deviceName).localeCompare(String(b.deviceName), 'nl') || String(a.name).localeCompare(String(b.name), 'nl'));
   const when = (iso) => (iso ? new Date(iso).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
   return `<div class="table-wrap"><table class="progress-table">
-    <thead><tr><th>Toestel</th><th>Leerling</th>${LESSONS.map((l) => `<th title="${esc(l.title)}">${l.id}</th>`).join('')}<th>★</th><th>Laatst gezien</th></tr></thead>
+    <thead><tr><th>Laatste toestel</th><th>Leerling</th>${LESSONS.map((l) => `<th title="${esc(l.title)}">${l.id}</th>`).join('')}<th>★</th><th>Laatst gezien</th></tr></thead>
     <tbody>${pupils.map((p) => `<tr><td>${esc(p.deviceName)}</td><td class="who">${esc(p.icon)} ${esc(p.name)}</td>
       ${LESSONS.map((l) => { const st = Number(p.lessons?.[l.id]) || 0; return `<td class="cell${st ? ' is-done' : ''}">${st ? '★'.repeat(st) : '·'}</td>`; }).join('')}
       <td class="tot">${Number(p.stars) || 0}</td><td class="muted">${esc(when(p.lastSeen))}</td></tr>`).join('')}</tbody></table></div>`;
@@ -529,7 +567,7 @@ const koppel = {
     if (name === null) return go('#/start');
     try {
       await testConnection(cfg.cloudUrl, cfg.cloudCode);
-      await saveSettings({ ...cfg, deviceName: name.trim() || 'Toestel', cloudDirty: true });
+      await saveSettings({ ...cfg, deviceName: name.trim() || 'Toestel', cloudDirty: true, cloudVersion: 2 });
       await syncNow();
       showToast('Dit toestel is gekoppeld.');
     } catch (err) {
@@ -611,10 +649,10 @@ const leerkracht = {
       if (!b) return;
       if (b.dataset.reset) {
         const p = profiles.find((x) => x.id === b.dataset.reset);
-        if (await confirmModal(`Voortgang van ${p.name} resetten?`, 'Alle sterren en lessen van deze leerling worden gewist.', 'Reset')) { await resetProgress(p.id); reload(); }
+        if (await confirmModal(`Voortgang van ${p.name} resetten?`, `Alle sterren en lessen van deze leerling worden gewist${isConnected(ctx.settings) ? ', ook in de centrale opslag' : ''}.`, 'Reset')) { await resetProgress(p.id); reload(); }
       } else if (b.dataset.delete) {
         const p = profiles.find((x) => x.id === b.dataset.delete);
-        if (await confirmModal(`Profiel ${p.name} verwijderen?`, 'Het profiel, de voortgang en de opgeslagen schakelingen worden gewist.', 'Verwijder')) { await deleteProfile(p.id); reload(); }
+        if (await confirmModal(`Profiel ${p.name} verwijderen?`, `Het profiel, de voortgang en de opgeslagen schakelingen worden gewist${isConnected(ctx.settings) ? ', ook in de centrale opslag' : ''}.`, 'Verwijder')) { await deleteProfile(p.id); reload(); }
       } else if (b.matches('[data-reset-all]')) {
         if (await confirmModal('Iedereen resetten?', 'De voortgang van alle leerlingen op dit toestel wordt gewist. De profielen blijven bestaan.', 'Reset iedereen')) { await resetProgress(null); reload(); }
       } else if (b.matches('[data-export]')) {
@@ -645,7 +683,7 @@ const leerkracht = {
         b.disabled = true;
         try {
           await testConnection(url, code);
-          ctx.settings = await saveSettings({ cloudUrl: url, cloudCode: code, deviceName, cloudDirty: true });
+          ctx.settings = await saveSettings({ cloudUrl: url, cloudCode: code, deviceName, cloudDirty: true, cloudVersion: 2 });
           await syncNow();
           showToast('Gekoppeld! De voortgang van dit toestel is verstuurd.');
           reload();
