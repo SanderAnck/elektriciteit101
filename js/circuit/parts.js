@@ -70,6 +70,14 @@ export const PARTS = {
     R: 20,
     terminals: AB,
   },
+  fuse: {
+    name: 'Zekering',
+    info: 'Een zekering beschermt de kring. Binnenin zit een heel dun draadje dat smelt als er te veel stroom door gaat, bijvoorbeeld bij kortsluiting.',
+    R: 0.1,
+    fuse: true,
+    maxI: 1, // amps: above this the wire melts
+    terminals: AB,
+  },
   material: {
     name: 'Testmateriaal',
     info: 'Test of een materiaal de stroom doorlaat.',

@@ -46,6 +46,12 @@ const FACTS = {
     'Een weerstand maakt het de stroom moeilijker. Er gaat dan minder stroom door de hele kring.',
     'Zo bescherm je een LED of lampje tegen een te sterke batterij: één weerstand achter een LED is genoeg op een blokbatterij (9 V).',
   ],
+  fuse: [
+    'In de zekering zit een heel dun draadje. Gaat er te veel stroom door, dan wordt het zo heet dat het smelt: de zekering springt en de kring is open.',
+    'Zo beschermt een zekering tegen kortsluiting: de stroom stopt voordat de draden heet worden en er brand ontstaat.',
+    'Thuis zitten de zekeringen in de zekeringkast. Springt er een, dan zoek je eerst de fout voordat je hem weer aanzet.',
+    'Een zekering moet in de kring staan, vlak bij de batterij, zodat alle stroom erdoor gaat.',
+  ],
   material: [
     'Een geleider laat stroom door. Metalen zoals een munt, een paperclip en aluminiumfolie zijn goede geleiders.',
     'Een isolator laat geen stroom door: plastic, hout, papier en rubber.',
@@ -97,6 +103,12 @@ export function explainNow(part, sim) {
       : { ok: false, title: 'De schakelaar staat uit', text: 'Het brugje staat omhoog: er is een opening in de kring. De stroom kan hier niet door. Klik erop om hem aan te zetten.' };
   }
   if (part.type === 'button') return { ok: true, title: 'Drukknop', text: 'Druk en houd de muisknop ingedrukt: dan raakt het brugje beide kanten en is de kring dicht. Laat je los, dan is de kring weer open.' };
+  if (part.type === 'fuse') {
+    if (part.broken) return { ok: false, title: 'De zekering is gesprongen', text: 'Er ging veel te veel stroom door: kortsluiting! Het dunne draadje smolt en de kring ging open. Zo werd de batterij beschermd. Haal eerst de fout weg en kies dan “Nieuw”.' };
+    return st.level === 'uit'
+      ? { ok: true, title: 'De zekering is heel', text: 'Er gaat nu geen stroom door. Gaat er straks te veel stroom door, dan springt ze.' }
+      : { ok: true, title: 'De zekering laat de stroom door', text: 'Er gaat gewoon stroom door, niet te veel. Bij kortsluiting zou het draadje smelten.' };
+  }
   if (part.type === 'resistor') {
     return st.level === 'uit'
       ? { ok: false, title: 'Er gaat geen stroom door', text: 'De weerstand zit nog niet in een gesloten kring.' }

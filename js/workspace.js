@@ -7,7 +7,7 @@ import { partIcon } from './circuit/draw.js';
 import { esc, showTip, hideTip } from './ui.js';
 import { setBuzzer, playClick, playPop } from './sound.js';
 
-export const BASIC_KEYS = ['battery', 'battery:plat', 'battery:blok', 'lamp', 'led', 'buzzer', 'motor', 'switch', 'button', 'resistor'];
+export const BASIC_KEYS = ['battery', 'battery:plat', 'battery:blok', 'lamp', 'led', 'buzzer', 'motor', 'switch', 'button', 'resistor', 'fuse'];
 export const MATERIAL_KEYS = Object.keys(MATERIALS).map((m) => `material:${m}`);
 
 const ICON = {
@@ -163,7 +163,10 @@ export function mountWorkspace(root, opts) {
     if (sim.short) {
       n.push(`<div class="notice notice--bad"><span class="notice__icon" aria-hidden="true">⚠</span><div><b>Kortsluiting!</b> De stroom gaat rechtstreeks van + naar −, zonder lampje of zoemer erop. In het echt worden de batterij en de draden heel heet: gevaarlijk, er kan brand ontstaan! Haal die draad weg.</div></div>`);
     }
-    const burnt = c.parts.filter((p) => p.broken);
+    if (c.parts.some((p) => p.type === 'fuse' && p.broken)) {
+      n.push(`<div class="notice notice--warn"><span class="notice__icon" aria-hidden="true">⚡</span><div><b>De zekering is gesprongen!</b> Er was kortsluiting: veel te veel stroom. Het draadje in de zekering smolt, zodat de batterij en de draden niet heet werden. Haal de fout weg, klik op de zekering en kies <b>Nieuw</b>.</div></div>`);
+    }
+    const burnt = c.parts.filter((p) => p.broken && p.type !== 'fuse');
     if (burnt.length) {
       const what = burnt.every((p) => p.type === 'led') ? (burnt.length > 1 ? 'LED’s zijn' : 'LED is') : burnt.length > 1 ? 'lampjes zijn' : 'lampje is';
       n.push(`<div class="notice notice--bad"><span class="notice__icon" aria-hidden="true">✖</span><div><b>Doorgebrand!</b> Een ${what} doorgebrand: de batterij was te sterk en er ging te veel stroom door. Gebruik een zwakkere batterij, zet lampjes achter elkaar of gebruik een weerstand. Klik op het kapotte onderdeel en kies <b>Nieuw</b>.</div></div>`);

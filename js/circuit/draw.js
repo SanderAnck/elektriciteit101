@@ -194,7 +194,21 @@ function material(p) {
     <path d="M42 -7 L26 -3 L26 3 L42 7 Z" fill="#2B2F3A"/>`;
 }
 
-const DRAW = { battery, lamp, led, buzzer, motor, switch: switchPart, button, resistor, material };
+// Fuse: a glass tube with a thin wire; when it melted, the wire has a gap.
+function fuse(p, st) {
+  const live = st && st.level !== 'uit' && !p.broken;
+  return `
+    <path d="M-60 0 H-34 M34 0 H60" ${LEAD}/>
+    <rect x="-34" y="-12" width="10" height="24" rx="2" fill="#ADB5BD" stroke="#868E96" stroke-width="2"/>
+    <rect x="24" y="-12" width="10" height="24" rx="2" fill="#ADB5BD" stroke="#868E96" stroke-width="2"/>
+    <rect x="-24" y="-11" width="48" height="22" rx="4" fill="#E7F5FF" fill-opacity=".85" stroke="#A5D8FF" stroke-width="2"/>
+    ${p.broken
+      ? '<path d="M-24 0 H-6 M6 0 H24" stroke="#495057" stroke-width="2"/><circle cx="-5" cy="0" r="2.5" fill="#495057"/><circle cx="5" cy="0" r="2.5" fill="#495057"/>'
+      : `<path d="M-24 0 H24" stroke="${live ? '#F08C00' : '#868E96'}" stroke-width="2"/>`}
+    ${p.broken ? broken(p) : ''}`;
+}
+
+const DRAW = { battery, lamp, led, buzzer, motor, switch: switchPart, button, resistor, fuse, material };
 
 /** Inner SVG markup for a part. */
 export function drawPart(part, state, ui) {
