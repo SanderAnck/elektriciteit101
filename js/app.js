@@ -2,7 +2,8 @@
 
 import { views } from './views.js';
 import { requestPersistentStorage } from './db.js';
-import { getSettings, saveSettings, currentProfile, getProgress } from './store.js';
+import { getSettings, saveSettings, currentProfile, getProgress, setChangeHook } from './store.js';
+import { scheduleSync, startAutoSync } from './cloud.js';
 import { showToast, modal, hideTip } from './ui.js';
 import { setSoundEnabled, setBuzzer } from './sound.js';
 
@@ -128,6 +129,8 @@ async function registerServiceWorker() {
 }
 
 if (!location.hash) history.replaceState(null, '', `#/${DEFAULT_ROUTE}`);
+setChangeHook(() => scheduleSync());
+startAutoSync();
 render();
 registerServiceWorker().catch((err) => console.warn('Service worker failed', err));
 requestPersistentStorage();
