@@ -4,7 +4,7 @@
 // terminal. Simulation results come from sim.js; drawings from draw.js.
 
 import { PARTS, GRID, terminalPos } from './parts.js';
-import { WORLD, clampPos, addPart, addWire, removePart, removeWire, rotatePart, freeSpot, History, clone } from './model.js';
+import { WORLD, clampPos, addPart, addWire, removePart, removeWire, rotatePart, flipPart, freeSpot, History, clone } from './model.js';
 import { simulate, nominalCurrent } from './sim.js';
 import { drawPart, DEFS } from './draw.js';
 
@@ -125,6 +125,14 @@ export class Editor {
   rotateSelected() {
     if (this.selection?.kind !== 'part') return;
     rotatePart(this.circuit, this.selection.id);
+    this.commit();
+    this.render();
+  }
+
+  /** Turn a battery or LED around: + and − swap, the wires stay. */
+  flipSelected() {
+    if (this.selection?.kind !== 'part') return;
+    flipPart(this.circuit, this.selection.id);
     this.commit();
     this.render();
   }

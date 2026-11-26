@@ -59,6 +59,22 @@ export function rotatePart(c, id) {
   if (p) p.rot = ((p.rot || 0) + 90) % 360;
 }
 
+/**
+ * Turn a part around: + and − swap places, the wires stay where they are.
+ * (Rotating keeps every wire on its own terminal, so the circuit stays the same.)
+ */
+export function flipPart(c, id) {
+  const p = c.parts.find((pp) => pp.id === id);
+  if (!p) return;
+  p.rot = ((p.rot || 0) + 180) % 360;
+  const [t1, t2] = PARTS[p.type].terminals.map((t) => t.id);
+  for (const w of c.wires) {
+    for (const end of [w.a, w.b]) {
+      if (end.part === id) end.term = end.term === t1 ? t2 : t1;
+    }
+  }
+}
+
 /** A free spot near the middle for parts added with a click. */
 export function freeSpot(c, world = WORLD) {
   const cx = world.w / 2;

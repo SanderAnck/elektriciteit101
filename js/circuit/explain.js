@@ -85,7 +85,7 @@ export function explainNow(part, sim) {
     }
     if (st.level === 'uit') {
       if (st.reason === 'overbrugd') return { ok: false, title: `Waarom ${WORKS[part.type] === 'brandt' ? 'brandt' : 'werkt'} ${name} niet?`, text: `Er loopt een draad rond ${name}. De stroom kiest de makkelijkste weg: door de draad, niet door ${name}. We zeggen: ${name} is overbrugd. Haal die draad weg.` };
-      if (st.reason === 'verkeerd') return { ok: false, title: 'Waarom brandt de LED niet?', text: 'De LED staat verkeerd om. Hij laat de stroom maar in één richting door: de + van de LED moet naar de + van de batterij. Draai hem om.' };
+      if (st.reason === 'verkeerd') return { ok: false, title: 'Waarom brandt de LED niet?', text: 'De LED staat verkeerd om. Hij laat de stroom maar in één richting door: de + van de LED moet naar de + van de batterij. Klik erop en kies “Omdraaien”.' };
       return { ok: false, title: `Waarom ${WORKS[part.type] === 'brandt' ? 'brandt' : 'werkt'} ${name} niet?`, text: 'De kring is niet gesloten. Misschien is er een losse draad, staat een schakelaar uit, of zit er een isolator in de weg. De stroom kan dan niet rond.' };
     }
     const why = `De kring is gesloten: de stroom gaat van de +, door ${name}, terug naar de −.`;

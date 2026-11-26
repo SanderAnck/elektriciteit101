@@ -118,6 +118,7 @@ document.getElementById('help-btn').addEventListener('click', () =>
           <h3 class="help__sub">Sneltoetsen</h3>
           <table class="keys">
             <tr><td><kbd>R</kbd> of dubbelklik</td><td>Draaien</td></tr>
+            <tr><td><kbd>O</kbd></td><td>Batterij of LED omdraaien (+ en − wisselen)</td></tr>
             <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Verwijderen</td></tr>
             <tr><td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Ongedaan maken</td></tr>
             <tr><td><kbd>Ctrl</kbd> + <kbd>Y</kbd></td><td>Opnieuw</td></tr>

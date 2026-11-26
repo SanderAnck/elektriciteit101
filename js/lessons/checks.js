@@ -92,7 +92,7 @@ const RULES = {
     const has = c.parts.filter((p) => matches(p, r.part)).length;
     if (has < count) return `Je hebt nog niet genoeg onderdelen: zet ${count > 1 ? `${count} keer ` : ''}${word(r.part)} op het raster.`;
     if (r.part === 'led' && c.parts.some((p) => p.type === 'led' && sim.parts[p.id]?.reason === 'verkeerd'))
-      return 'De LED staat verkeerd om. Draai hem om: de + van de LED naar de + van de batterij.';
+      return 'De LED staat verkeerd om. Klik erop en kies “Omdraaien”: de + van de LED moet naar de + van de batterij.';
     if (c.parts.some((p) => matches(p, r.part) && sim.parts[p.id]?.reason === 'overbrugd'))
       return `Er loopt een draad rond ${word(r.part)}: de stroom neemt die makkelijke weg.`;
     return `${cap(word(r.part, count > 1))} ${count > 1 ? 'werken' : 'werkt'} nog niet. Is de kring helemaal gesloten?`;
