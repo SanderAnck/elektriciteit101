@@ -175,11 +175,11 @@ const BASE = [
       {
         goal: 'Laat de LED branden.',
         check: [{ rule: 'aan', part: 'led' }],
-        questions: [{ q: 'Draai de LED om (toets R of de draaiknop). Wat gebeurt er?', options: ['Hij brandt feller', 'Hij brandt niet meer', 'Er verandert niets'], answer: 1 }],
+        questions: [{ q: 'Klik op de LED en kies “Omdraaien”. Wat gebeurt er?', options: ['Hij brandt feller', 'Hij brandt niet meer', 'Er verandert niets'], answer: 1 }],
         hints: [
           'Kijk naar de + en de − bij de LED.',
           'De + van de LED moet naar de + van de batterij.',
-          'Brandt hij niet? Draai de LED om of wissel de draden.',
+          'Brandt hij niet? Klik op de LED en kies “Omdraaien”.',
         ],
       },
     ],
@@ -339,7 +339,7 @@ const EXTRA = [
         check: [{ rule: 'bediend', part: 'motor', by: 'switch' }],
         questions: [
           { q: 'Wat maakt de motor van de elektrische energie?', options: ['Licht', 'Beweging', 'Geluid'], answer: 1 },
-          { q: 'Draai de batterij om (toets R). Wat gebeurt er?', options: ['De motor stopt', 'De motor draait de andere kant op', 'De motor draait sneller'], answer: 1 },
+          { q: 'Klik op de batterij en kies “Omdraaien”. Wat gebeurt er?', options: ['De motor stopt', 'De motor draait de andere kant op', 'De motor draait sneller'], answer: 1 },
         ],
         hints: [
           'Een motor werkt net als een lampje: de stroom moet erdoor en terug naar de batterij.',
@@ -399,8 +399,8 @@ const EXTRA = [
         questions: [{ q: 'Draai daarna de batterij om. Wat blijft branden?', options: ['Allebei', 'Alleen het lampje', 'Alleen de LED', 'Niets'], answer: 1 }],
         hints: [
           'Maak eerst een kring met het lampje. Verbind daarna de LED met dezelfde + en −.',
-          'Brandt de LED niet? Draai hem om: de + van de LED naar de + van de batterij.',
-          'Klik op de batterij en druk op R om ze om te draaien. Kijk goed!',
+          'Brandt de LED niet? Klik erop en kies “Omdraaien”: de + van de LED moet naar de + van de batterij.',
+          'Klik op de batterij en kies “Omdraaien”: de + en de − wisselen van plaats. Kijk goed!',
         ],
       },
     ],

@@ -15,6 +15,7 @@ const ICON = {
   undo: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
   redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>',
   rotate: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>',
+  flip: '<svg viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   clear: '<svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M7 17l-3-3 9-9 6 6-6 6z"/></svg>',
   dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/></svg>',
@@ -107,6 +108,7 @@ export function mountWorkspace(root, opts) {
         <div class="selbar" hidden>
           <span class="selbar__name"></span>
           <button type="button" class="sbtn sbtn--good" data-act="repair" title="Vervang door een nieuw exemplaar">${ICON.redo}<span>Nieuw</span></button>
+          <button type="button" class="sbtn" data-act="flip" title="Omdraaien: + en − wisselen (O)">${ICON.flip}<span>Omdraaien</span></button>
           <button type="button" class="sbtn" data-act="rotate" title="Draaien (R)">${ICON.rotate}<span>Draai</span></button>
           <button type="button" class="sbtn sbtn--danger" data-act="delete" title="Verwijderen (Delete)">${ICON.trash}<span>Verwijder</span></button>
         </div>
@@ -156,6 +158,7 @@ export function mountWorkspace(root, opts) {
     els.selbar.querySelector('.selbar__name').textContent = part ? partName(part) : 'Draad';
     els.selbar.querySelector('[data-act="rotate"]').hidden = sel.kind !== 'part';
     els.selbar.querySelector('[data-act="repair"]').hidden = !part?.broken;
+    els.selbar.querySelector('[data-act="flip"]').hidden = !(part && (part.type === 'battery' || part.type === 'led'));
   }
 
   function updateNotices(c, sim) {
@@ -172,7 +175,7 @@ export function mountWorkspace(root, opts) {
       n.push(`<div class="notice notice--bad"><span class="notice__icon" aria-hidden="true">✖</span><div><b>Doorgebrand!</b> Een ${what} doorgebrand: de batterij was te sterk en er ging te veel stroom door. Gebruik een zwakkere batterij, zet lampjes achter elkaar of gebruik een weerstand. Klik op het kapotte onderdeel en kies <b>Nieuw</b>.</div></div>`);
     }
     if (c.parts.some((p) => p.type === 'led' && sim.parts[p.id]?.reason === 'verkeerd')) {
-      n.push(`<div class="notice notice--warn"><span class="notice__icon" aria-hidden="true">±</span><div><b>De LED staat verkeerd om.</b> Een LED werkt maar in één richting. Draai hem om: de + van de LED naar de + van de batterij.</div></div>`);
+      n.push(`<div class="notice notice--warn"><span class="notice__icon" aria-hidden="true">±</span><div><b>De LED staat verkeerd om.</b> Een LED werkt maar in één richting. Klik erop en kies “Omdraaien”: de + van de LED moet naar de + van de batterij.</div></div>`);
     }
     if (!sim.short && sim.anyCurrent && c.parts.some((p) => PARTS[p.type].load && sim.parts[p.id]?.reason === 'overbrugd')) {
       n.push(`<div class="notice notice--info"><span class="notice__icon" aria-hidden="true">↪</span><div><b>Overbrugd.</b> Een draad loopt rond een onderdeel. De stroom neemt die makkelijke weg en gaat er niet door. Daarom werkt het niet.</div></div>`);
@@ -233,6 +236,7 @@ export function mountWorkspace(root, opts) {
     if (act === 'undo') ed.undo();
     if (act === 'redo') ed.redo();
     if (act === 'rotate') ed.rotateSelected();
+    if (act === 'flip') ed.flipSelected();
     if (act === 'repair') ed.repairSelected();
     if (act === 'delete') ed.deleteSelected();
     if (act === 'clear') opts.onClear ? opts.onClear() : ed.clear();
@@ -306,6 +310,7 @@ export function mountWorkspace(root, opts) {
     if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); ed.undo(); }
     else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); ed.redo(); }
     else if (k === 'r' && !e.ctrlKey && !e.metaKey) ed.rotateSelected();
+    else if (k === 'o' && !e.ctrlKey && !e.metaKey) ed.flipSelected();
     else if (k === 'delete' || k === 'backspace') { e.preventDefault(); ed.deleteSelected(); }
     else if (k === 'escape') { if (!ed.cancelWire()) ed.select(null); }
   };

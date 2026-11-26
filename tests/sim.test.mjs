@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { simulate } from '../js/circuit/sim.js';
 import { checkStep } from '../js/lessons/checks.js';
+import { flipPart, rotatePart } from '../js/circuit/model.js';
 import { LESSONS } from '../js/lessons/lessons.js';
 
 let n = 0;
@@ -240,4 +241,16 @@ test('the burn-out facts in the explanations match the simulation', () => {
   assert.equal(chain('blok', 2), true); // 9 V: two burn
   assert.equal(chain('blok', 3), false); // three in series survive
   assert.equal(chain('plat', 1, 'led'), true);
+});
+
+test('rotating keeps the circuit, turning the battery around reverses the motor', () => {
+  const bat = P('battery'); const m = P('motor');
+  const c = { parts: [bat, m], wires: [W(bat, 'pos', m, 'a'), W(m, 'b', bat, 'neg')] };
+  const before = simulate(c).parts[m.id].current;
+  assert.ok(before > 0);
+  rotatePart(c, bat.id); rotatePart(c, bat.id);
+  assert.ok(simulate(c).parts[m.id].current > 0); // rotating 180° does not change the wires
+  flipPart(c, bat.id);
+  assert.ok(simulate(c).parts[m.id].current < 0); // + and − swapped: the motor turns the other way
+  assert.equal(bat.rot, 0);
 });
