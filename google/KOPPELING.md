@@ -45,20 +45,37 @@ Niets anders.
    Open die link één keer op elke Chromebook (bv. via Classroom of mail) en geef het
    toestel een naam. Klaar.
 
-## 5. Bekijk de voortgang
+## 5. Een profiel op een ander toestel
+
+Werkt een leerling op een andere Chromebook? Klik op het profielscherm op
+**Mijn profiel staat op een ander toestel** en kies de naam. Het profiel en de sterren
+komen mee. Daarna wordt de voortgang van alle toestellen samengevoegd: per les telt het
+beste resultaat. Reset of verwijder je een leerling in het leerkrachtendeel, dan gebeurt
+dat ook centraal.
+
+## 6. Bekijk de voortgang
 
 - In de app: leerkrachtendeel → **Alle toestellen** → vul je leerkrachtcode in →
   **Gegevens ophalen**.
-- Of open de sheet in Drive: tabblad **Leerlingen** (overzicht) en **Voortgang**
-  (per les).
+- Of open de sheet in Drive: tabblad **Leerlingen** (één rij per leerling) en
+  **Voortgang** (per leerling en per les).
 
 Een Chromebook stuurt zijn gegevens telkens als een leerling een les afrondt, een profiel
 maakt of als er iets gereset wordt. Zonder internet onthoudt hij dat en stuurt hij later.
 
-## Het script aanpassen
+## Het script bijwerken naar een nieuwe versie
 
-Pas je het script aan (bv. een nieuwe code)? Kies dan **Implementeren → Implementaties
-beheren → potloodje → Versie: Nieuwe versie → Implementeren**. De URL blijft dezelfde.
+1. Open de sheet → **Extensies → Apps Script**.
+2. Noteer je twee codes (`KLASCODE` en `LEERKRACHTCODE`) bovenaan.
+3. Wis alles en plak de nieuwe code uit [`google/Code.gs`](Code.gs). Vul je twee codes
+   opnieuw in, precies zoals ze waren. Klik op **Opslaan**.
+4. **Implementeren → Implementaties beheren** → klik op het **potloodje** →
+   bij *Versie* kies **Nieuwe versie** → **Implementeren**.
+   Zo blijft de URL dezelfde en hoef je de Chromebooks niet opnieuw te koppelen.
+   (Kies dus niet "Nieuwe implementatie": dat geeft een nieuwe URL.)
+
+Van versie 1 naar 2: de oude tabbladen krijgen de naam "… (oud)" en mogen weg.
+Elke Chromebook stuurt bij de volgende start al zijn gegevens opnieuw.
 
 ## Later naar de schooldrive
 

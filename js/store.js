@@ -10,7 +10,7 @@ let cache = null;
 // Called after progress or profiles change (used for central storage).
 let changeHook = null;
 export const setChangeHook = (fn) => { changeHook = fn; };
-const changed = () => changeHook?.();
+const changed = (change) => changeHook?.(change);
 
 export async function getSettings() {
   if (!cache) {
@@ -59,7 +59,7 @@ export async function deleteProfile(id) {
   await db.delete('profiles', id);
   const s = await getSettings();
   if (s.currentProfile === id) await saveSettings({ currentProfile: null });
-  changed();
+  changed({ op: 'delete', profileIds: [id] });
 }
 
 /** Progress of one pupil: { lessonId: record }. */
@@ -79,9 +79,10 @@ export async function saveLessonResult(profileId, lessonId, { stars, fails, hint
 }
 
 export async function resetProgress(profileId) {
+  const ids = profileId ? [profileId] : (await db.getAll('profiles')).map((p) => p.id);
   for (const r of await db.getAll('progress')) if (!profileId || r.profileId === profileId) await db.delete('progress', r.id);
   for (const d of await db.getAll('drafts')) if (d.id.includes(':les') && (!profileId || d.id.startsWith(`${profileId}:`))) await db.delete('drafts', d.id);
-  changed();
+  changed({ op: 'reset', profileIds: ids });
 }
 
 export function isUnlocked(lessonId, progress, settings) {
