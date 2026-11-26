@@ -24,7 +24,15 @@ const OLD_SCRIPT = 'Je Google-script is een oudere versie. Plak de nieuwe code u
 
 async function rawPost(url, body) {
   // text/plain avoids a CORS preflight, which Apps Script does not answer.
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' });
+  } catch {
+    // Google answers without CORS headers when it wants a login: the web app is not open to everyone.
+    throw new Error(navigator.onLine
+      ? 'Google gaf geen toegang. Controleer bij Implementeren: "Uitvoeren als: Ik" en "Wie heeft toegang: Iedereen" (niet "Iedereen met een Google-account"). Open het adres ook eens in een nieuw tabblad: je moet "Het Stroomkringen-script (versie 3) werkt" zien.'
+      : 'Geen internetverbinding.');
+  }
   if (!res.ok) throw new Error(`De server antwoordde niet (${res.status}).`);
   return res.json().catch(() => { throw new Error('Onverwacht antwoord. Is de web-app goed geïmplementeerd (toegang: iedereen)?'); });
 }
