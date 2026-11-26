@@ -80,3 +80,10 @@ export function playSuccess() {
 export function playOops() {
   if (enabled) { tone(330, 0, 0.18, 'sine', 0.1); tone(262, 0.16, 0.25, 'sine', 0.1); }
 }
+
+/** A lamp burns out: a short "pop". */
+export function playPop() {
+  if (!enabled) return;
+  tone(1400, 0, 0.04, 'square', 0.08);
+  tone(180, 0.03, 0.12, 'sawtooth', 0.06);
+}

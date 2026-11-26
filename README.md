@@ -2,7 +2,7 @@
 
 Interactieve STEM-app voor het 5de en 6de leerjaar: bouw en test elektrische stroomkringen
 met batterijen, lampjes, LED's, zoemers, motoren, schakelaars, drukknoppen en draden.
-Met een vrije **zandbak** en **10 opdrachten** van makkelijk naar moeilijk.
+Met een vrije **zandbak** en **11 opdrachten** van makkelijk naar moeilijk.
 
 Progressive Web App (PWA): één statische site, geen backend, geen build-stap, geen
 npm-dependencies. Alle gegevens blijven lokaal op het toestel (IndexedDB): geen login,
@@ -28,7 +28,7 @@ geen account, geen tracking. Gemaakt voor laptops en Chromebooks in liggende sta
 | `js/circuit/sim.js` | Simulatie (los van de tekeningen, testbaar in Node) |
 | `js/circuit/draw.js` | SVG-tekeningen van de onderdelen |
 | `js/circuit/editor.js` | Slepen, draden trekken, selecteren, stroombolletjes |
-| `js/lessons/lessons.js` | **De 10 lessen als gegevens** (zie hieronder) |
+| `js/lessons/lessons.js` | **De lessen als gegevens** (zie hieronder) |
 | `js/lessons/checks.js` | Regels voor de knop "Controleer" |
 | `tests/` | Tests voor simulatie en lescontroles |
 | `sw.js` | Service worker voor offline gebruik |
@@ -44,6 +44,8 @@ Met de knooppuntmethode volgt de stroom door elk onderdeel; kinderen zien enkel
 
 - Twee lampjes in serie branden zwak, parallel even fel als één lampje.
 - Twee batterijen in serie: extra fel.
+- Drie batterijtypes: gewone batterij (1,5 V), platte batterij (4,5 V, 3 cellen) en blokbatterij (9 V, 6 cellen).
+- Te veel stroom (meer dan 2,5 × normaal) laat een lampje of LED **doorbranden**. Het blijft kapot tot je het vervangt (knop "Nieuw"). Lampjes in serie of een weerstand remmen de stroom af.
 - Een LED verkeerd om brandt niet, met een hint.
 - Een onderdeel met een draad ernaast is *overbrugd* en werkt niet, met uitleg.
 - Kortsluiting (zeer grote stroom door de batterij): rode, warme batterij, rode draden en een waarschuwing.

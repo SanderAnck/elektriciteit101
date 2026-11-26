@@ -5,9 +5,9 @@ import { Editor } from './circuit/editor.js';
 import { PARTS, keyOf, keyName, keyInfo, partName, partInfo, MATERIALS } from './circuit/parts.js';
 import { partIcon } from './circuit/draw.js';
 import { esc, showTip, hideTip } from './ui.js';
-import { setBuzzer, playClick } from './sound.js';
+import { setBuzzer, playClick, playPop } from './sound.js';
 
-export const BASIC_KEYS = ['battery', 'lamp', 'led', 'buzzer', 'motor', 'switch', 'button', 'resistor'];
+export const BASIC_KEYS = ['battery', 'battery:plat', 'battery:blok', 'lamp', 'led', 'buzzer', 'motor', 'switch', 'button', 'resistor'];
 export const MATERIAL_KEYS = Object.keys(MATERIALS).map((m) => `material:${m}`);
 
 const ICON = {
@@ -36,6 +36,7 @@ const REASON_TEXT = {
   open: 'De kring is niet gesloten.',
   overbrugd: 'Overbrugd: de stroom gaat door de draad ernaast, niet erdoor.',
   verkeerd: 'Verkeerd om! De + van de LED moet naar de + van de batterij.',
+  kapot: 'Doorgebrand! Klik op “Nieuw” om het te vervangen.',
 };
 
 /** One sentence about what a part is doing right now. */
@@ -51,7 +52,7 @@ export function statusText(part, sim) {
   }
   if (part.type === 'resistor') return st.level === 'uit' ? 'Er gaat nu geen stroom door.' : 'De weerstand remt de stroom af.';
   const t = LEVEL_TEXT[part.type]?.[st.level] || '';
-  const explain = st.level === 'uit' && REASON_TEXT[st.reason] && (sim.anyCurrent || st.reason === 'verkeerd');
+  const explain = st.level === 'uit' && REASON_TEXT[st.reason] && (sim.anyCurrent || st.reason === 'verkeerd' || st.reason === 'kapot');
   return explain ? `${t} ${REASON_TEXT[st.reason]}` : t;
 }
 
@@ -105,6 +106,7 @@ export function mountWorkspace(root, opts) {
         <div class="empty-hint" hidden>Sleep een onderdeel uit de gereedschapskist naar hier.</div>
         <div class="selbar" hidden>
           <span class="selbar__name"></span>
+          <button type="button" class="sbtn sbtn--good" data-act="repair" title="Vervang door een nieuw exemplaar">${ICON.redo}<span>Nieuw</span></button>
           <button type="button" class="sbtn" data-act="rotate" title="Draaien (R)">${ICON.rotate}<span>Draai</span></button>
           <button type="button" class="sbtn sbtn--danger" data-act="delete" title="Verwijderen (Delete)">${ICON.trash}<span>Verwijder</span></button>
         </div>
@@ -153,12 +155,18 @@ export function mountWorkspace(root, opts) {
     els.selbar.hidden = false;
     els.selbar.querySelector('.selbar__name').textContent = part ? partName(part) : 'Draad';
     els.selbar.querySelector('[data-act="rotate"]').hidden = sel.kind !== 'part';
+    els.selbar.querySelector('[data-act="repair"]').hidden = !part?.broken;
   }
 
   function updateNotices(c, sim) {
     const n = [];
     if (sim.short) {
       n.push(`<div class="notice notice--bad"><span class="notice__icon" aria-hidden="true">⚠</span><div><b>Kortsluiting!</b> De stroom gaat rechtstreeks van + naar −, zonder lampje of zoemer erop. In het echt worden de batterij en de draden heel heet: gevaarlijk, er kan brand ontstaan! Haal die draad weg.</div></div>`);
+    }
+    const burnt = c.parts.filter((p) => p.broken);
+    if (burnt.length) {
+      const what = burnt.every((p) => p.type === 'led') ? (burnt.length > 1 ? 'LED’s zijn' : 'LED is') : burnt.length > 1 ? 'lampjes zijn' : 'lampje is';
+      n.push(`<div class="notice notice--bad"><span class="notice__icon" aria-hidden="true">✖</span><div><b>Doorgebrand!</b> Een ${what} doorgebrand: de batterij was te sterk en er ging te veel stroom door. Gebruik een zwakkere batterij, zet lampjes achter elkaar of gebruik een weerstand. Klik op het kapotte onderdeel en kies <b>Nieuw</b>.</div></div>`);
     }
     if (c.parts.some((p) => p.type === 'led' && sim.parts[p.id]?.reason === 'verkeerd')) {
       n.push(`<div class="notice notice--warn"><span class="notice__icon" aria-hidden="true">±</span><div><b>De LED staat verkeerd om.</b> Een LED werkt maar in één richting. Draai hem om: de + van de LED naar de + van de batterij.</div></div>`);
@@ -184,6 +192,7 @@ export function mountWorkspace(root, opts) {
     circuit: opts.circuit,
     showDots: opts.settings.dots !== false,
     onResize: () => ws.editor && updateBar(),
+    onBurn: () => playPop(),
     onChange: (c, sim) => {
       ws.sim = sim;
       if (!ws.editor) return;
@@ -221,6 +230,7 @@ export function mountWorkspace(root, opts) {
     if (act === 'undo') ed.undo();
     if (act === 'redo') ed.redo();
     if (act === 'rotate') ed.rotateSelected();
+    if (act === 'repair') ed.repairSelected();
     if (act === 'delete') ed.deleteSelected();
     if (act === 'clear') opts.onClear ? opts.onClear() : ed.clear();
     if (act === 'dots') {

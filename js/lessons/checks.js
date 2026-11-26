@@ -4,13 +4,14 @@
 //
 // Rules (use them in lessons.js under `check`):
 //   { rule: 'aan', part: 'lamp', count: 1 }          at least `count` of these work (with all switches on)
+//   { rule: 'aan', part: 'lamp', met: 'battery:plat' }  … and they get their energy from that battery
 //   { rule: 'bediend', part: 'lamp', by: 'switch' }   works when every `by` is on, stops when every `by` is off
 //   { rule: 'serie', part: 'lamp', count: 2 }         `count` of these work and stand one after the other
 //   { rule: 'parallel', part: 'lamp', count: 2 }      `count` of these work brightly, each on its own branch
 //   { rule: 'en', part: 'lamp', by: 'switch' }        works only when ALL `by` parts are on (at least 2)
 //   { rule: 'of', part: 'lamp', by: ['switch','button'] }  works when ONE of the `by` parts is on (at least 2)
 //   { rule: 'testplek', part: 'material', with: 'lamp' }   a material sits in the circuit of the lamp
-// A short circuit in any switch position always fails the check.
+// A short circuit, or a lamp or LED that would burn out, in any switch position always fails the check.
 // Every rule may carry its own `fout` text, shown when it is not met.
 
 import { simulate, isOn } from '../circuit/sim.js';
@@ -47,6 +48,7 @@ const PART_WORDS = {
   buzzer: ['de zoemer', 'de zoemers'],
   motor: ['de motor', 'de motoren'],
 };
+const BATTERY_WORDS = { battery: 'gewone batterij', 'battery:plat': 'platte batterij', 'battery:blok': 'blokbatterij' };
 const word = (part, many = false) => (PART_WORDS[part] || ['het onderdeel', 'de onderdelen'])[many ? 1 : 0];
 
 function working(circuit, sim, part) {
@@ -57,7 +59,17 @@ const RULES = {
   aan(c, r) {
     const count = r.count || 1;
     const sim = simulate(c, { controls: allSet(c, true) });
-    if (working(c, sim, r.part).length >= count) return null;
+    const on = working(c, sim, r.part);
+    if (on.length >= count) {
+      if (!r.met) return null;
+      const bats = c.parts.filter((p) => matches(p, r.met));
+      if (!bats.length) return `Gebruik de ${BATTERY_WORDS[r.met] || 'batterij'} in je kring.`;
+      const without = simulate(c, { controls: allSet(c, true), open: new Set(bats.map((b) => b.id)) });
+      if (on.some((p) => !isOn(without, p.id))) return null;
+      return `${cap(word(r.part, count > 1))} moet${count > 1 ? 'en' : ''} branden op de ${BATTERY_WORDS[r.met] || 'batterij'}.`;
+    }
+    if (c.parts.some((p) => matches(p, r.part) && p.broken))
+      return `${cap(word(r.part))} is doorgebrand. Klik erop en kies “Nieuw”, en maak de stroom minder sterk.`;
     const has = c.parts.filter((p) => matches(p, r.part)).length;
     if (has < count) return `Je hebt nog niet genoeg onderdelen: zet ${count > 1 ? `${count} keer ` : ''}${word(r.part)} op het raster.`;
     if (r.part === 'led' && c.parts.some((p) => p.type === 'led' && sim.parts[p.id]?.reason === 'verkeerd'))
@@ -154,8 +166,13 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  */
 export function checkStep(circuit, step, answers = {}) {
   for (const controls of combos(circuit)) {
-    if (simulate(circuit, { controls }).short)
+    const s = simulate(circuit, { controls });
+    if (s.short)
       return { ok: false, message: 'Er is kortsluiting! De stroom gaat dan rechtstreeks van + naar −. Haal die draad weg.' };
+    if (s.overload.length) {
+      const p = circuit.parts.find((pp) => pp.id === s.overload[0]);
+      return { ok: false, message: `Pas op: ${p.type === 'led' ? 'de LED' : 'het lampje'} brandt door, want de batterij is te sterk. Remt iets de stroom af?` };
+    }
   }
   for (const r of asList(step.check)) {
     const fn = RULES[r.rule];

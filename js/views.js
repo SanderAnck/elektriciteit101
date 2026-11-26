@@ -10,7 +10,7 @@ import { LESSONS, lessonById } from './lessons/lessons.js';
 import { checkStep, starsFor } from './lessons/checks.js';
 import { mountWorkspace, statusText, ICON } from './workspace.js';
 import { partIcon } from './circuit/draw.js';
-import { partName, partInfo } from './circuit/parts.js';
+import { partName, partInfo, keyOf } from './circuit/parts.js';
 import { sanitize, emptyCircuit, clone } from './circuit/model.js';
 import { playSuccess, playOops, playClick } from './sound.js';
 
@@ -104,7 +104,7 @@ const start = {
           <a class="choice choice--lessons" href="#/opdrachten">
             <div class="choice__art">${partIcon('switch', { on: true })}${partIcon('buzzer')}${partIcon('led', { on: true })}</div>
             <div class="choice__title">Opdrachten</div>
-            <div class="choice__text">10 lessen van makkelijk naar moeilijk.</div>
+            <div class="choice__text">${LESSONS.length} lessen van makkelijk naar moeilijk.</div>
             <div class="choice__meta">${t.done} van ${t.max} lessen · <span class="star is-on">★</span> ${t.stars}</div>
           </a>
         </div>
@@ -128,6 +128,7 @@ function sandboxPanel(part, sim) {
         <ul class="idea-list">
           <li>Twee lampjes achter elkaar, en daarna naast elkaar.</li>
           <li>Twee batterijen achter elkaar: brandt het lampje feller?</li>
+          <li>Een lampje op de blokbatterij. Oei! Hoe red je het?</li>
           <li>Een motor: wat gebeurt er als je de batterij omdraait?</li>
           <li>Welke materialen laten de stroom door?</li>
         </ul>
@@ -143,7 +144,7 @@ function sandboxPanel(part, sim) {
       </div>`;
   }
   return `<div class="panel__section">
-      <div class="panel__part">${partIcon(part.type === 'material' ? `material:${part.variant}` : part.type, { on: sim?.parts[part.id]?.level !== 'uit' && part.type !== 'battery' })}</div>
+      <div class="panel__part">${partIcon(keyOf(part), { on: sim?.parts[part.id]?.level !== 'uit' && part.type !== 'battery' })}</div>
       <h2 class="panel__title">${esc(partName(part))}</h2>
       <p class="panel__text">${esc(partInfo(part))}</p>
       <p class="panel__status">${esc(statusText(part, sim))}</p>

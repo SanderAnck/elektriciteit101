@@ -1,9 +1,9 @@
-// De 10 opdrachten, als gewone gegevens.
+// De opdrachten, als gewone gegevens.
 // Je kan teksten aanpassen of een les toevoegen zonder de rest van de code
 // te kennen. Per les:
 //   id          volgnummer (lessen komen vrij in deze volgorde)
 //   title       korte titel
-//   icon        tekening op de kaart: battery, lamp, led, buzzer, motor, switch, button, resistor, material:munt …
+//   icon        tekening op de kaart: battery, battery:plat, battery:blok, lamp, led, buzzer, motor, switch, button, resistor, material:munt …
 //   intro       1 tot 3 korte zinnen: wat ga je leren?
 //   toolbox     onderdelen in de gereedschapskist met het aantal (draden zijn altijd onbeperkt)
 //   start       (optioneel) een schakeling die al klaar staat
@@ -257,6 +257,39 @@ export const LESSONS = [
   },
   {
     id: 10,
+    title: 'Te sterk!',
+    icon: 'battery:plat',
+    intro: 'Er zijn sterke en zwakke batterijen. Is de batterij te sterk voor een lampje, dan brandt het draadje in het lampje door. Probeer het maar!',
+    toolbox: { battery: 1, 'battery:plat': 1, 'battery:blok': 1, lamp: 3, led: 1, resistor: 1 },
+    steps: [
+      {
+        goal: 'Sluit één lampje aan op de platte batterij. Wat gebeurt er? Laat daarna lampjes veilig branden op de platte batterij.',
+        check: [{ rule: 'aan', part: 'lamp', met: 'battery:plat' }],
+        questions: [
+          { q: 'Wat gebeurt er met één lampje op de platte batterij?', options: ['Het brandt zwak', 'Het brandt door', 'Er gebeurt niets'], answer: 1 },
+        ],
+        hints: [
+          'Brandt een lampje door? Klik erop en kies “Nieuw” om het te vervangen.',
+          'Als lampjes achter elkaar staan, krijgt elk lampje minder stroom.',
+          'Zet drie lampjes achter elkaar op de platte batterij.',
+        ],
+      },
+      {
+        goal: 'Laat de LED branden op de blokbatterij, zonder dat hij doorbrandt.',
+        check: [{ rule: 'aan', part: 'led', met: 'battery:blok' }],
+        hints: [
+          'Een weerstand remt de stroom af.',
+          'Zet de weerstand achter de LED, in dezelfde kring.',
+          'Blokbatterij + → weerstand → LED (+ naar +) → blokbatterij −.',
+        ],
+      },
+    ],
+    success: 'Een sterke batterij geeft meer stroom. Te veel stroom laat een lampje doorbranden. Meer lampjes achter elkaar of een weerstand remmen de stroom af.',
+    wistJeDat: 'Op elk lampje en elk toestel staat hoeveel volt het aankan. Het stopcontact geeft 230 volt: dat is meer dan 150 gewone batterijen samen, en levensgevaarlijk!',
+    eindterm: 'Spanning van een bron afstemmen op een verbruiker; veilig omgaan met elektriciteit.',
+  },
+  {
+    id: 11,
     title: 'Eindopdracht: alarm',
     icon: 'buzzer',
     intro: 'Toon wat je kan! Bouw een alarm voor je kamerdeur met een lampje en een zoemer.',
