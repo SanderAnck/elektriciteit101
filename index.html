@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stroomkringen</title>
+  <meta name="description" content="Bouw en test elektrische stroomkringen. Voor het 5de en 6de leerjaar.">
+  <meta name="theme-color" content="#2F5BEA">
+  <meta name="color-scheme" content="light">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/favicon-64.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/version.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="#/start" aria-label="Stroomkringen, naar start">
+        <img src="icons/favicon-64.png" alt="" width="32" height="32">
+        <span>Stroomkringen</span>
+      </a>
+      <nav class="nav" aria-label="Hoofdmenu">
+        <a class="nav__link" href="#/start" data-route="start">Start</a>
+        <a class="nav__link" href="#/zandbak" data-route="zandbak">Zandbak</a>
+        <a class="nav__link" href="#/opdrachten" data-route="opdrachten">Opdrachten</a>
+      </nav>
+      <div class="topbar__right">
+        <a class="profile-chip" id="profile-chip" href="#/profielen" title="Ander profiel kiezen" hidden></a>
+        <button type="button" class="icon-btn icon-btn--sound" id="sound-toggle" aria-pressed="true" aria-label="Geluid aan of uit">
+          <svg class="snd-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+          <svg class="snd-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 10l4 4M21 10l-4 4"/></svg>
+        </button>
+        <button type="button" class="icon-btn" id="help-btn" aria-label="Hulp en sneltoetsen" title="Hulp en sneltoetsen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8M12 17.2v.1"/></svg>
+        </button>
+        <a class="icon-btn" href="#/leerkracht" aria-label="Leerkrachtendeel" title="Leerkrachtendeel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v6"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="view" id="view" tabindex="-1"></main>
+  </div>
+
+  <div class="too-small" role="alert">
+    <div class="too-small__box">
+      <img src="icons/icon-192.png" alt="" width="96" height="96">
+      <h1>Open deze app op een laptop</h1>
+      <p>Stroomkringen werkt het best op een laptop of Chromebook, met een groot scherm en een muis of touchpad.</p>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <noscript>Stroomkringen heeft JavaScript nodig.</noscript>
+</body>
+</html>
