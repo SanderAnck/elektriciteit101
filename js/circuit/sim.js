@@ -6,13 +6,14 @@
 // equivalent). A LED is a resistance that only conducts forwards, found by
 // iterating. The result for children is simple: off / dim / bright.
 
-import { PARTS, MATERIALS } from './parts.js';
+import { PARTS, MATERIALS, batteryOf } from './parts.js';
 
 export const V_CELL = 1.5;
 export const R_INT = 0.2;
 const G_WIRE = 1000; // 1 milliohm
 const G_MIN = 1e-9; // keeps floating nodes solvable
 export const SHORT_CURRENT = 2; // amps through a battery that count as a short circuit
+export const BURN_RATIO = 2.5; // a lamp or LED burns out above 2,5 × its normal current
 const I_EPS = 0.005;
 
 /** Current through a load with one cell and nothing else: "normal brightness". */
@@ -27,6 +28,7 @@ export function levelOf(ratio) {
 
 function conducts(part, opts) {
   if (opts.open?.has(part.id)) return false;
+  if (part.broken) return false;
   if (opts.closed?.has(part.id)) return true;
   if (part.type === 'switch') return opts.controls?.[part.id] ?? Boolean(part.on);
   if (part.type === 'button') return opts.controls?.[part.id] ?? Boolean(opts.pressed?.has(part.id));
@@ -81,7 +83,7 @@ class UnionFind {
  *         controls: { id: bool } (override switch/button state),
  *         open: Set<id> (treat part as removed), closed: Set<id> (treat as a wire) }
  * Returns { parts: { id: { level, ratio, current, reason, short? } },
- *           wires: { id: { current, hot } }, short, shortParts: [ids], anyCurrent }
+ *           wires: { id: { current, hot } }, short, shortParts: [ids], overload: [ids that burn out], anyCurrent }
  */
 export function simulate(circuit, opts = {}) {
   const index = new Map();
@@ -112,13 +114,14 @@ export function simulate(circuit, opts = {}) {
       const [i, j] = two(p);
       if (p.type === 'battery') {
         if (opts.open?.has(p.id)) continue;
-        const g = 1 / R_INT;
+        const { cells } = batteryOf(p);
+        const g = 1 / (R_INT * cells);
         stamp(i, j, g);
-        b[j] += V_CELL * g; // pushes current out of the + terminal
-        b[i] -= V_CELL * g;
+        b[j] += V_CELL * cells * g; // pushes current out of the + terminal
+        b[i] -= V_CELL * cells * g;
         continue;
       }
-      if (PARTS[p.type].diode && !ledOn.get(p.id) && !opts.closed?.has(p.id)) continue;
+      if (PARTS[p.type].diode && (p.broken || !ledOn.get(p.id)) && !opts.closed?.has(p.id)) continue;
       const g = conductance(p, opts);
       if (g) stamp(i, j, g);
     }
@@ -145,13 +148,14 @@ export function simulate(circuit, opts = {}) {
     if (conductance(p, opts) >= G_WIRE * 0.99) uf.union(...two(p));
   }
 
-  const res = { parts: {}, wires: {}, short: false, shortParts: [], anyCurrent: false };
+  const res = { parts: {}, wires: {}, short: false, shortParts: [], overload: [], anyCurrent: false };
   for (const p of parts) {
     const [i, j] = two(p);
     const dv = V[i] - V[j];
     if (p.type === 'battery') {
       // Current leaving the + terminal.
-      const I = opts.open?.has(p.id) ? 0 : (V_CELL - (V[j] - V[i])) / R_INT;
+      const { cells } = batteryOf(p);
+      const I = opts.open?.has(p.id) ? 0 : (V_CELL * cells - (V[j] - V[i])) / (R_INT * cells);
       const short = Math.abs(I) > SHORT_CURRENT;
       res.parts[p.id] = { level: Math.abs(I) > I_EPS ? 'fel' : 'uit', current: I, short, reason: short ? 'kortsluiting' : null };
       if (short) { res.short = true; res.shortParts.push(p.id); }
@@ -159,15 +163,18 @@ export function simulate(circuit, opts = {}) {
       continue;
     }
     let g = conductance(p, opts);
-    if (PARTS[p.type].diode && !ledOn.get(p.id) && !opts.closed?.has(p.id)) g = 0;
+    if (PARTS[p.type].diode && (p.broken || !ledOn.get(p.id)) && !opts.closed?.has(p.id)) g = 0;
     const I = g * dv; // from first to second terminal
     const def = PARTS[p.type];
     const out = { current: I, level: Math.abs(I) > I_EPS ? 'fel' : 'uit', reason: null };
     if (def.load) {
       out.ratio = Math.abs(I) / nominalCurrent(def.R);
       out.level = levelOf(out.ratio);
+      // Too much current: the lamp or LED burns out (the editor then marks it broken).
+      if (def.burns && out.ratio > BURN_RATIO) { out.overload = true; res.overload.push(p.id); }
       if (out.level === 'uit') {
-        if (opts.open?.has(p.id)) out.reason = 'los';
+        if (p.broken) out.reason = 'kapot';
+        else if (opts.open?.has(p.id)) out.reason = 'los';
         else if (uf.find(i) === uf.find(j)) out.reason = 'overbrugd';
         else if (def.diode && dv < -0.3) out.reason = 'verkeerd';
         else out.reason = 'open';

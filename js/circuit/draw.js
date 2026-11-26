@@ -12,6 +12,8 @@ const GLOW_R = { zwak: 34, fel: 48, heelfel: 62 };
 const GLOW_O = { zwak: 0.45, fel: 0.8, heelfel: 1 };
 
 function battery(p, st) {
+  if (p.variant === 'plat') return flatBattery(p, st);
+  if (p.variant === 'blok') return blockBattery(p, st);
   const hot = st?.short;
   return `
     <line x1="-60" y1="0" x2="-40" y2="0" ${LEAD}/>
@@ -24,10 +26,58 @@ function battery(p, st) {
     <rect x="-40" y="-18" width="74" height="36" rx="7" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/>
     ${label(21, 0, '+', p.rot, 'part-label part-label--dark')}
     ${label(-24, 0, '−', p.rot, 'part-label part-label--light')}
-    ${hot ? label(0, -40, '⚠', p.rot, 'part-warn') : ''}`;
+    ${hot ? label(0, -40, '⚠', p.rot, 'part-warn') : ''}
+    ${label(0, 30, '1,5 V', p.rot, 'part-volt')}`;
+}
+
+const HEAT = '<g class="heat"><path d="M-24 -34 q6 -8 0 -16 q-6 -8 0 -16"/><path d="M0 -34 q6 -8 0 -16 q-6 -8 0 -16"/><path d="M24 -34 q6 -8 0 -16 q-6 -8 0 -16"/></g>';
+
+// 4,5 V flat battery: a wide box with two brass strips.
+function flatBattery(p, st) {
+  const hot = st?.short;
+  return `
+    <path d="M-60 0 H-34 M60 0 H34" ${LEAD}/>
+    ${hot ? HEAT : ''}
+    <rect x="-40" y="-24" width="80" height="44" rx="5" fill="${hot ? '#E03131' : '#1C7ED6'}" stroke="rgba(0,0,0,.3)" stroke-width="2"/>
+    <rect x="-40" y="-24" width="80" height="12" rx="5" fill="${hot ? '#FF8A80' : '#F2B705'}"/>
+    <path d="M-30 -2 h-10 M30 -2 h10" stroke="#C9A227" stroke-width="5"/>
+    ${label(-24, 6, '−', p.rot, 'part-label part-label--light')}
+    ${label(24, 6, '+', p.rot, 'part-label part-label--light')}
+    ${label(0, 6, '4,5 V', p.rot, 'part-volt part-volt--light')}
+    ${hot ? label(0, -44, '⚠', p.rot, 'part-warn') : ''}`;
+}
+
+// 9 V block battery with two snaps on top.
+function blockBattery(p, st) {
+  const hot = st?.short;
+  return `
+    <path d="M-60 0 H-22 V-24 M60 0 H22 V-24" ${LEAD}/>
+    ${hot ? HEAT : ''}
+    <rect x="-30" y="-24" width="60" height="48" rx="6" fill="${hot ? '#E03131' : '#2B2F3A'}" stroke="rgba(0,0,0,.3)" stroke-width="2"/>
+    <rect x="-30" y="4" width="60" height="20" rx="0" fill="${hot ? '#FF8A80' : '#E03131'}"/>
+    <circle cx="-14" cy="-28" r="6" fill="#ADB5BD" stroke="#495057" stroke-width="2"/>
+    <path d="M10 -34 h10 l-2 6 l2 6 h-10 z" fill="#ADB5BD" stroke="#495057" stroke-width="2"/>
+    ${label(-14, -12, '−', p.rot, 'part-label part-label--light')}
+    ${label(15, -12, '+', p.rot, 'part-label part-label--light')}
+    ${label(0, 14, '9 V', p.rot, 'part-volt part-volt--light')}
+    ${hot ? label(0, -48, '⚠', p.rot, 'part-warn') : ''}`;
+}
+
+function broken(p) {
+  return label(30, -38, '✖', p.rot, 'part-broken');
 }
 
 function lamp(p, st) {
+  if (p.broken) {
+    return `
+    <path d="M-60 0 H-30 Q-16 0 -11 10" ${LEAD}/>
+    <path d="M60 0 H30 Q16 0 11 10" ${LEAD}/>
+    <circle cx="0" cy="-20" r="22" fill="#9AA1AE" stroke="#59607A" stroke-width="2.5"/>
+    <path d="M-6 0 L-6 -14 L-3 -22 M6 0 L6 -14 L2 -19" fill="none" stroke="#2B2F3A" stroke-width="2"/>
+    <path d="M-10 -32 q4 -8 0 -14 M6 -34 q4 -8 0 -14" fill="none" stroke="#868E96" stroke-width="2" class="smoke"/>
+    <rect x="-12" y="-2" width="24" height="18" rx="3" fill="#B8BEC9" stroke="#7A8394" stroke-width="2"/>
+    ${broken(p)}`;
+  }
   const lv = st?.level || 'uit';
   const on = lv !== 'uit';
   return `
@@ -42,7 +92,7 @@ function lamp(p, st) {
 
 function led(p, st) {
   const lv = st?.level || 'uit';
-  const on = lv !== 'uit';
+  const on = lv !== 'uit' && !p.broken;
   return `
     <path d="M-60 0 H-8 V-6" ${LEAD}/>
     <path d="M60 0 H8 V-6" ${LEAD}/>
@@ -51,7 +101,8 @@ function led(p, st) {
     <rect x="-17" y="-8" width="31" height="6" rx="2" fill="#B33A3A" stroke="#7A1F1F" stroke-width="2"/>
     ${on ? '<ellipse cx="-5" cy="-24" rx="3" ry="6" fill="#fff" opacity=".7"/>' : ''}
     ${label(-36, 16, '+', p.rot, 'part-label part-label--sign')}
-    ${label(36, 16, '−', p.rot, 'part-label part-label--sign')}`;
+    ${label(36, 16, '−', p.rot, 'part-label part-label--sign')}
+    ${p.broken ? `<path d="M-14 -6 V-26 A14 14 0 0 1 14 -26 V-6 Z" fill="#495057" opacity=".8"/>${broken(p)}` : ''}`;
 }
 
 function buzzer(p, st) {
@@ -160,6 +211,7 @@ export const DEFS = `
 /** A small standalone icon of a part (toolbox, lesson cards). */
 export function partIcon(key, { on = false } = {}) {
   const [type, variant] = key.split(':');
+  if (type === 'battery') return `<svg class="part-icon" viewBox="-66 -50 132 90" aria-hidden="true">${drawPart({ type, variant, rot: 0 }, null, {})}</svg>`;
   const part = { type, variant, rot: 0, on };
   const state = on ? { level: 'fel', current: 1 } : null;
   const vb = type === 'motor' ? '-66 -66 132 100' : '-66 -50 132 90';

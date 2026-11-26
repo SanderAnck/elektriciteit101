@@ -20,9 +20,10 @@ export const PARTS = {
   },
   lamp: {
     name: 'Lampje',
-    info: 'Een lampje geeft licht als er stroom door het draadje in het glas loopt.',
+    info: 'Een lampje geeft licht als er stroom door het draadje in het glas loopt. Is de batterij te sterk, dan brandt het draadje door.',
     R: 10,
     load: true,
+    burns: true,
     terminals: AB,
   },
   led: {
@@ -30,6 +31,7 @@ export const PARTS = {
     info: 'Een LED is een zuinig lampje. Hij werkt maar in één richting: de + (lange poot) naar de + van de batterij.',
     R: 10,
     load: true,
+    burns: true,
     diode: true,
     terminals: [
       { id: 'pos', x: -60, y: 0, label: '+' },
@@ -88,15 +90,31 @@ export const MATERIALS = {
   rubber: { name: 'Rubber', conductor: false },
 };
 
-/** Toolbox key for a part: 'lamp' or 'material:munt'. */
-export const keyOf = (part) => (part.type === 'material' ? `material:${part.variant}` : part.type);
+// Battery types. cells: how many 1,5 V cells inside (more cells = stronger).
+// A part without variant is the normal 1,5 V battery.
+export const BATTERIES = {
+  aa: { name: 'Batterij', label: '1,5 V', cells: 1, info: 'Een gewone batterij (1,5 volt). Ze geeft energie: de stroom loopt van de + door de kring terug naar de −.' },
+  plat: { name: 'Platte batterij', label: '4,5 V', cells: 3, info: 'Een platte batterij (4,5 volt) is drie keer zo sterk als een gewone batterij. Eén lampje alleen brandt erdoor!' },
+  blok: { name: 'Blokbatterij', label: '9 V', cells: 6, info: 'Een blokbatterij (9 volt) is zes keer zo sterk als een gewone batterij. Lampjes en LED’s branden erdoor, tenzij je de stroom afremt.' },
+};
+
+export const batteryOf = (part) => BATTERIES[part.variant] || BATTERIES.aa;
+
+/** Toolbox key for a part: 'lamp', 'material:munt' or 'battery:plat'. */
+export const keyOf = (part) => {
+  if (part.type === 'material') return `material:${part.variant}`;
+  if (part.type === 'battery' && part.variant && part.variant !== 'aa') return `battery:${part.variant}`;
+  return part.type;
+};
 
 export function partName(part) {
   if (part.type === 'material') return MATERIALS[part.variant]?.name || 'Materiaal';
+  if (part.type === 'battery') return `${batteryOf(part).name} ${batteryOf(part).label}`;
   return PARTS[part.type]?.name || part.type;
 }
 
 export function partInfo(part) {
+  if (part.type === 'battery') return batteryOf(part).info;
   if (part.type === 'material') {
     const m = MATERIALS[part.variant];
     return `${m.name}. Laat het de stroom door? Zet het in een kring met een lampje en kijk.`;

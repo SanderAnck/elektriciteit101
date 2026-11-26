@@ -129,6 +129,16 @@ export class Editor {
     this.render();
   }
 
+  /** Replace a burnt-out lamp or LED by a new one. */
+  repairSelected() {
+    const p = this.selection?.kind === 'part' ? this.part(this.selection.id) : null;
+    if (!p?.broken) return;
+    delete p.broken;
+    this.commit();
+    this.render();
+    this.opts.onSelect?.(this.selection);
+  }
+
   deleteSelected() {
     const s = this.selection;
     if (!s) return;
@@ -385,7 +395,15 @@ export class Editor {
   render() {
     if (this.destroyed) return;
     const c = this.circuit;
-    const sim = simulate(c, { pressed: this.pressed });
+    let sim = simulate(c, { pressed: this.pressed });
+    // Too much current: those lamps and LEDs burn out for good (until replaced).
+    if (sim.overload.length) {
+      for (const id of sim.overload) { const p = this.part(id); if (p) p.broken = true; }
+      // Part of the same step: undo goes back to before the wire that burnt it.
+      this.history.replace(c);
+      this.opts.onBurn?.(sim.overload);
+      sim = simulate(c, { pressed: this.pressed });
+    }
     this.sim = sim;
     const sel = this.selection;
     const byId = new Map(c.parts.map((p) => [p.id, p]));

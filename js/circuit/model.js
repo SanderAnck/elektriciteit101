@@ -99,6 +99,10 @@ export class History {
     if (this.stack.length > 100) this.stack.shift();
     this.pos = this.stack.length - 1;
   }
+  /** Update the current snapshot without adding an undo step. */
+  replace(c) {
+    this.stack[this.pos] = JSON.stringify(c);
+  }
   canUndo() { return this.pos > 0; }
   canRedo() { return this.pos < this.stack.length - 1; }
   undo() { if (this.canUndo()) this.pos--; return JSON.parse(this.stack[this.pos]); }

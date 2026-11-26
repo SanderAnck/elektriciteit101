@@ -140,8 +140,9 @@ test('every lesson start circuit and data are valid', () => {
   }
 });
 
-test('lessons 2, 3, 4, 7, 8 and 10 accept a correct solution', () => {
+test('lessons 2, 3, 4, 7, 8 and the final one accept a correct solution', () => {
   const L = (id) => LESSONS.find((l) => l.id === id);
+  const ALARM = LESSONS.find((l) => l.title.startsWith('Eindopdracht')).id;
   const bat = P('battery'); const lamp = P('lamp'); const sw = P('switch'); const btn = P('button');
   const buz = P('buzzer'); const led = P('led');
   // 2: switch in series with lamp
@@ -177,8 +178,42 @@ test('lessons 2, 3, 4, 7, 8 and 10 accept a correct solution', () => {
   // 10: alarm
   const lamp2 = P('lamp');
   const c10 = { parts: [bat, sw, lamp2, buz], wires: [W(bat, 'pos', sw, 'a'), W(sw, 'b', lamp2, 'a'), W(sw, 'b', buz, 'a'), W(lamp2, 'b', bat, 'neg'), W(buz, 'b', bat, 'neg')] };
-  assert.equal(checkStep(c10, L(10).steps[0]).ok, true);
+  assert.equal(checkStep(c10, L(ALARM).steps[0]).ok, true);
   const c10b = { parts: [...c10.parts, btn], wires: [...c10.wires, W(bat, 'pos', btn, 'a'), W(btn, 'b', sw, 'b')] };
-  assert.equal(checkStep(c10b, L(10).steps[1]).ok, true);
-  assert.equal(checkStep(c10, L(10).steps[1]).ok, false);
+  assert.equal(checkStep(c10b, L(ALARM).steps[1]).ok, true);
+  assert.equal(checkStep(c10, L(ALARM).steps[1]).ok, false);
+});
+
+test('strong batteries: a lamp burns out, lamps in series or a resistor protect it', () => {
+  const plat = P('battery', { variant: 'plat' }); const l = P('lamp');
+  const one = { parts: [plat, l], wires: [W(plat, 'pos', l, 'a'), W(l, 'b', plat, 'neg')] };
+  let s = simulate(one);
+  assert.deepEqual(s.overload, [l.id]);
+  l.broken = true;
+  s = simulate(one);
+  assert.equal(s.parts[l.id].level, 'uit');
+  assert.equal(s.parts[l.id].reason, 'kapot');
+  assert.equal(s.short, false);
+  // three lamps in series on 4,5 V: normal brightness, nothing burns
+  const a = P('lamp'); const b = P('lamp'); const c = P('lamp');
+  const series = { parts: [plat, a, b, c], wires: [W(plat, 'pos', a, 'a'), W(a, 'b', b, 'a'), W(b, 'b', c, 'a'), W(c, 'b', plat, 'neg')] };
+  s = simulate(series);
+  assert.equal(s.overload.length, 0);
+  assert.equal(s.parts[a.id].level, 'fel');
+  // lesson 10
+  const les = LESSONS.find((x) => x.id === 10);
+  assert.equal(checkStep(series, les.steps[0], { 0: 1 }).ok, true);
+  l.broken = false;
+  assert.equal(checkStep(one, les.steps[0], { 0: 1 }).ok, false);
+  const aa = P('battery'); const l2 = P('lamp');
+  const normal = { parts: [aa, l2, plat], wires: [W(aa, 'pos', l2, 'a'), W(l2, 'b', aa, 'neg')] };
+  assert.equal(checkStep(normal, les.steps[0], { 0: 1 }).ok, false); // not on the flat battery
+  // 9 V: LED burns alone, survives with a resistor
+  const blok = P('battery', { variant: 'blok' }); const led = P('led'); const r = P('resistor');
+  const bare = { parts: [blok, led], wires: [W(blok, 'pos', led, 'pos'), W(led, 'neg', blok, 'neg')] };
+  assert.deepEqual(simulate(bare).overload, [led.id]);
+  const safe = { parts: [blok, led, r], wires: [W(blok, 'pos', r, 'a'), W(r, 'b', led, 'pos'), W(led, 'neg', blok, 'neg')] };
+  assert.equal(simulate(safe).overload.length, 0);
+  assert.equal(checkStep(safe, les.steps[1]).ok, true);
+  assert.equal(checkStep(bare, les.steps[1]).ok, false);
 });

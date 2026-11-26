@@ -222,10 +222,10 @@ body.is-work .view { overflow: hidden; }
 .lessons-page { max-width: 1280px; margin: 0 auto; padding: clamp(16px, 3vh, 32px) 24px 24px; }
 .lessons-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: clamp(12px, 2.5vh, 24px); }
 .lessons-total { font-weight: 650; color: var(--text-2); }
-.lesson-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: clamp(12px, 1.4vw, 20px); }
+.lesson-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: clamp(12px, 1.4vw, 20px); }
 .lesson-card {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 14px 12px 14px; min-height: clamp(190px, 31vh, 250px);
+  padding: 14px 10px 12px; min-height: clamp(180px, 30vh, 250px);
   background: var(--surface); border: 2px solid var(--line); border-radius: 20px; color: var(--text);
   box-shadow: var(--shadow); transition: transform .12s, border-color .12s;
 }
@@ -341,6 +341,7 @@ a.lesson-card[href]:hover { transform: translateY(-3px); border-color: var(--acc
 }
 .sbtn:hover { background: var(--surface-2); }
 .sbtn--danger { color: var(--bad); }
+.sbtn--good { color: var(--good); }
 .sbtn--danger:hover { background: var(--bad-soft); }
 .sbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -359,6 +360,10 @@ a.lesson-card[href]:hover { transform: translateY(-3px); border-color: var(--acc
 .part-tag--on { fill: var(--good); }
 .part-tag--off { fill: var(--bad); }
 .part-warn { font-size: 26px; fill: var(--bad); }
+.part-volt { font: 800 13px var(--font); fill: var(--text-2); pointer-events: none; }
+.part-volt--light { fill: #fff; }
+.part-broken { font: 900 22px var(--font); fill: var(--bad); pointer-events: none; }
+.smoke { animation: heat 1.4s ease-in-out infinite alternate; }
 .heat path { fill: none; stroke: #FF6B6B; stroke-width: 3; stroke-linecap: round; animation: heat 1s ease-in-out infinite alternate; }
 @keyframes heat { from { opacity: .3; transform: translateY(2px); } to { opacity: 1; transform: translateY(-3px); } }
 .waves path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; animation: waves .35s ease-in-out infinite alternate; }
