@@ -30,52 +30,98 @@ function fakeSheets() {
 
 function load() {
   const { ss, sheets } = fakeSheets();
+  const store = new Map();
+  let n = 0;
   const ctx = {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
     ContentService: { createTextOutput: (t) => ({ setMimeType: () => JSON.parse(t) }), MimeType: { JSON: 'json' } },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => store.get(k) ?? null, setProperty: (k, v) => store.set(k, v) }) },
+    Utilities: { getUuid: () => `id${++n}-0000-0000` },
   };
   vm.createContext(ctx);
-  const code = readFileSync(new URL('../google/Code.gs', import.meta.url), 'utf8').replace("'kies-een-klascode'", "'klas'").replace("'kies-een-geheime-leerkrachtcode'", "'geheim'");
+  const code = readFileSync(new URL('../google/Code.gs', import.meta.url), 'utf8')
+    .replace("'kies-een-toestelcode'", "'toestel'").replace("'kies-een-geheime-leerkrachtcode'", "'geheim'");
   vm.runInContext(code, ctx);
-  const post = (body) => ctx.doPost({ postData: { contents: JSON.stringify({ klascode: 'klas', ...body }) } });
-  return { ctx, post, sheets };
+  const raw = (body) => ctx.doPost({ postData: { contents: JSON.stringify(body) } });
+  const dev = (body) => raw({ toestelcode: 'toestel', ...body });
+  const teach = (body) => raw({ leerkrachtcode: 'geheim', ...body });
+  return { ctx, raw, dev, teach, sheets, store };
 }
 
-test('apps script: merge progress from two devices, find and fetch a profile, reset and delete', () => {
-  const { ctx, post, sheets } = load();
-  assert.equal(post({ action: 'ping' }).version, 2);
-  assert.equal(ctx.doPost({ postData: { contents: JSON.stringify({ klascode: 'nee', action: 'ping' }) } }).ok, false);
-  const pupil = { id: 'u1', name: 'Lotte', icon: '🦊' };
-  post({ deviceName: 'CB 1', pupils: [pupil], progress: [{ profileId: 'u1', lessonId: 1, title: 'Licht aan!', stars: 2, doneAt: '2026-01-01' }] });
-  post({ deviceName: 'CB 2', pupils: [pupil], progress: [{ profileId: 'u1', lessonId: 1, stars: 1, doneAt: '2026-01-02' }, { profileId: 'u1', lessonId: 2, stars: 3, doneAt: '2026-01-02' }] });
-  const list = post({ action: 'profiles' }).pupils;
-  assert.equal(list.length, 1);
-  assert.equal(list[0].stars, 5); // best of lesson 1 (2) + lesson 2 (3)
-  assert.equal(list[0].lastDevice, 'CB 2');
-  const one = post({ action: 'profile', id: 'u1' });
-  assert.deepEqual(one.progress.map((r) => [r.lessonId, r.stars]).sort(), [[1, 2], [2, 3]]);
-  const overview = ctx.doGet({ parameter: { code: 'geheim' } });
-  assert.equal(overview.pupils[0].lessons[2], 3);
-  assert.equal(ctx.doGet({ parameter: { code: 'x' } }).ok, false);
-  post({ deviceName: 'CB 1', ops: [{ op: 'reset', profileId: 'u1' }], pupils: [pupil], progress: [] });
-  assert.equal(post({ action: 'profiles' }).pupils[0].stars, 0);
-  post({ deviceName: 'CB 1', ops: [{ op: 'delete', profileId: 'u1' }] });
-  assert.equal(post({ action: 'profiles' }).pupils.length, 0);
-  assert.ok(sheets.has('Leerlingen') && sheets.has('Voortgang'));
+test('apps script v3: classes, profiles per class, merging two devices', () => {
+  const { raw, dev, teach, sheets } = load();
+  const { version, epoch } = dev({ action: 'ping' });
+  assert.equal(version, 3);
+  assert.equal(raw({ toestelcode: 'nee', action: 'ping' }).ok, false);
+  assert.equal(raw({ leerkrachtcode: 'nee', action: 'overview' }).ok, false);
+  assert.equal(teach({ action: 'teacherPing' }).version, 3);
+
+  teach({ action: 'addClass', name: '5A' });
+  const classes = teach({ action: 'addClass', name: '6B' }).classes;
+  assert.deepEqual(classes.map((c) => c.name), ['5A', '6B']);
+  const [a, b] = classes;
+  assert.deepEqual(dev({ action: 'classes', epoch }).classes.map((c) => c.id), [a.id, b.id]);
+
+  // Lotte in 5A on CB 1, Mo in 6B on CB 2.
+  dev({ action: 'sync', epoch, deviceName: 'CB 1', klasId: a.id, ops: [{ op: 'create', profileId: 'u1', klasId: a.id, name: 'Lotte', icon: '🦊' }], pupils: [{ id: 'u1' }],
+    progress: [{ profileId: 'u1', lessonId: 1, title: 'Licht aan!', stars: 2, doneAt: '2026-01-01' }] });
+  dev({ action: 'sync', epoch, deviceName: 'CB 2', ops: [{ op: 'create', profileId: 'u2', klasId: b.id, name: 'Mo', icon: '🐼' }], pupils: [{ id: 'u2' }] });
+  // Unknown class: not created.
+  dev({ action: 'sync', epoch, ops: [{ op: 'create', profileId: 'u3', klasId: 'nope', name: 'X' }] });
+  // Lotte continues on CB 2: the best result counts.
+  const r = dev({ action: 'sync', epoch, deviceName: 'CB 2', klasId: a.id, pupils: [{ id: 'u1' }],
+    progress: [{ profileId: 'u1', lessonId: 1, stars: 1 }, { profileId: 'u1', lessonId: 2, stars: 3 }] });
+  assert.equal(r.klas.name, '5A');
+
+  const inA = dev({ action: 'profiles', epoch, klasId: a.id });
+  assert.equal(inA.klas.name, '5A');
+  assert.deepEqual(inA.pupils.map((p) => [p.name, p.stars, p.lastDevice]), [['Lotte', 5, 'CB 2']]);
+  assert.deepEqual(dev({ action: 'profiles', epoch, klasId: b.id }).pupils.map((p) => p.name), ['Mo']);
+  const one = dev({ action: 'profile', epoch, id: 'u1' });
+  assert.deepEqual(one.progress.map((x) => [x.lessonId, x.stars]).sort(), [[1, 2], [2, 3]]);
+  assert.equal(dev({ action: 'profile', epoch, id: 'zz' }).gone, true);
+
+  const ov = teach({ action: 'overview' });
+  assert.equal(ov.pupils.find((p) => p.id === 'u1').lessons[2], 3);
+  assert.deepEqual(ov.classes.map((c) => c.pupils), [1, 1]);
+  assert.deepEqual(sheets.get('Leerlingen').rows.slice(1).map((x) => x[0] + ':' + x[1]), ['5A:Lotte', '6B:Mo']);
+
+  // Teacher: unlock, rename, reset, delete pupil, delete class.
+  teach({ action: 'updateClass', id: a.id, unlockAll: true, name: '5A Zon' });
+  assert.deepEqual(dev({ action: 'sync', epoch, klasId: a.id }).klas, { id: a.id, name: '5A Zon', unlockAll: true });
+  teach({ action: 'resetPupil', id: 'u1' });
+  assert.equal(dev({ action: 'profile', epoch, id: 'u1' }).progress.length, 0);
+  teach({ action: 'deletePupil', id: 'u1' });
+  // A device that still has Lotte hears she is gone, and she is not brought back.
+  assert.deepEqual(dev({ action: 'sync', epoch, pupils: [{ id: 'u1' }], progress: [{ profileId: 'u1', lessonId: 1, stars: 3 }] }).gone, ['u1']);
+  assert.equal(dev({ action: 'profiles', epoch, klasId: a.id }).pupils.length, 0);
+  teach({ action: 'deleteClass', id: b.id });
+  assert.equal(dev({ action: 'sync', epoch, klasId: b.id }).klas, null);
+  assert.equal(teach({ action: 'overview' }).pupils.length, 0);
 });
 
-test('apps script: an old tab layout is kept aside as "(oud)"', () => {
-  const { post, sheets } = load();
-  const sh = sheets.get('Leerlingen') || null;
-  assert.equal(sh, null);
-  // simulate a version 1 tab
-  post({ action: 'ping' });
-  const { ss } = { ss: null };
-  void ss;
-  const fake = load();
-  fake.ctx.SpreadsheetApp.getActiveSpreadsheet().insertSheet('Leerlingen').appendRow(['Toestel', 'Leerling']);
-  fake.post({ deviceName: 'CB', pupils: [{ id: 'a', name: 'A', icon: '' }] });
-  assert.ok(fake.sheets.has('Leerlingen (oud)'));
-  assert.equal(fake.post({ action: 'profiles' }).pupils.length, 1);
+test('apps script v3: wiping the sheet makes every device start over', () => {
+  const { dev, teach, sheets } = load();
+  const { epoch } = dev({ action: 'ping' });
+  const k = teach({ action: 'addClass', name: '5A' }).classes[0];
+  dev({ action: 'sync', epoch, ops: [{ op: 'create', profileId: 'u1', klasId: k.id, name: 'Lotte', icon: '🦊' }] });
+  const w = teach({ action: 'wipe' });
+  assert.notEqual(w.epoch, epoch);
+  assert.deepEqual(w.classes, []);
+  assert.equal(sheets.get('Leerlingen').rows.length, 1); // header only
+  // An old device is told to forget everything, and does not bring Lotte back.
+  const res = dev({ action: 'sync', epoch, ops: [{ op: 'create', profileId: 'u1', klasId: k.id, name: 'Lotte' }] });
+  assert.equal(res.reset, true);
+  assert.equal(res.epoch, w.epoch);
+  assert.equal(dev({ action: 'ping' }).epoch, w.epoch);
+  assert.equal(teach({ action: 'overview' }).classes.length, 0);
+});
+
+test('apps script v3: tabs from an older version are kept aside as "(oud)"', () => {
+  const { ctx, dev, sheets } = load();
+  ctx.SpreadsheetApp.getActiveSpreadsheet().insertSheet('Leerlingen').appendRow(['Toestel', 'Leerling']);
+  dev({ action: 'classes' });
+  assert.ok(sheets.has('Leerlingen (oud)'));
+  assert.equal(sheets.get('Leerlingen').rows[0][0], 'Klas');
 });

@@ -118,6 +118,19 @@ document.getElementById('help-btn').addEventListener('click', () =>
 
 window.addEventListener('hashchange', render);
 
+// The sheet decides: after a wipe, a removed class or a removed profile this device follows.
+window.addEventListener('stroomkringen:reset', (e) => {
+  const onTeacher = parseRoute().name === 'leerkracht';
+  if (!onTeacher) showToast(e.detail?.reason === 'class' ? 'Deze klas bestaat niet meer. Kies je klas opnieuw.' : 'Alles is gewist door de leerkracht. Je begint opnieuw.');
+  if (onTeacher) return;
+  history.replaceState(null, '', '#/start');
+  render();
+});
+window.addEventListener('stroomkringen:gone', () => {
+  showToast('Dit profiel bestaat niet meer. Kies je profiel opnieuw.');
+  if (parseRoute().name !== 'leerkracht') render();
+});
+
 // Service worker: offline support and automatic updates.
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;

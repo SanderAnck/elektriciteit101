@@ -45,10 +45,13 @@ export async function currentProfile() {
 }
 
 export async function createProfile(name, icon) {
-  const p = { id: `u${Date.now().toString(36)}`, name: name.trim().slice(0, 20), icon, createdAt: new Date().toISOString() };
+  const s = await getSettings();
+  const p = { id: `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name: name.trim().slice(0, 20), icon, createdAt: new Date().toISOString() };
+  // Connected: the profile belongs to the class of this device and is made centrally.
+  if (s.cloudKlas) p.klasId = s.cloudKlas.id;
   await db.put('profiles', p);
   await saveSettings({ currentProfile: p.id });
-  changed();
+  changed({ op: 'create', profile: p });
   return p;
 }
 
@@ -72,7 +75,8 @@ export async function getProgress(profileId) {
 export async function saveLessonResult(profileId, lessonId, { stars, fails, hints }) {
   const id = `${profileId}:${lessonId}`;
   const old = (await db.get('progress', id)) || {};
-  const rec = { id, profileId, lessonId, done: true, stars: Math.max(old.stars || 0, stars), fails, hints, doneAt: new Date().toISOString() };
+  // pending: not yet in the central sheet.
+  const rec = { id, profileId, lessonId, done: true, stars: Math.max(old.stars || 0, stars), fails, hints, doneAt: new Date().toISOString(), pending: true };
   await db.put('progress', rec);
   changed();
   return rec;
@@ -85,8 +89,11 @@ export async function resetProgress(profileId) {
   changed({ op: 'reset', profileIds: ids });
 }
 
+/** All lessons open: on this device, or for the class (set by the teacher in the sheet). */
+export const allOpen = (settings) => Boolean(settings.cloudEpoch ? settings.cloudKlas?.unlockAll : settings.unlockAll);
+
 export function isUnlocked(lessonId, progress, settings) {
-  if (settings.unlockAll) return true;
+  if (allOpen(settings)) return true;
   const i = LESSONS.findIndex((l) => l.id === Number(lessonId));
   return i <= 0 || Boolean(progress[LESSONS[i - 1].id]?.done);
 }
