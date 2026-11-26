@@ -687,6 +687,7 @@ const leerkracht = {
             <p class="muted small">Versie ${esc(self.APP_VERSION)} · Alle gegevens blijven op dit toestel.</p>
           </section>
           ${connectCardHtml(ctx.settings)}
+          ${updateCardHtml()}
           </div>
         </div>
       </div>`;
@@ -697,9 +698,11 @@ const leerkracht = {
         showToast(e.target.checked ? 'Alle lessen zijn vrijgegeven.' : 'Lessen komen weer één voor één vrij.');
       }
     };
+    checkOnlineVersion(page);
     page.querySelector('.teacher').addEventListener('click', async (e) => {
       const b = e.target.closest('button');
       if (!b) return;
+      if (await updateClick(b)) return;
       if (b.dataset.reset) {
         const p = profiles.find((x) => x.id === b.dataset.reset);
         if (await confirmModal(`Voortgang van ${p.name} resetten?`, 'Alle sterren en lessen van deze leerling worden gewist.', 'Reset')) { await resetProgress(p.id); reload(); }
@@ -745,6 +748,62 @@ const leerkracht = {
     });
   },
 };
+
+// ---------- App updates ----------
+
+const updateCardHtml = () => `<section class="card">
+    <h2 class="card__title">App-versie</h2>
+    <p class="small">Op dit toestel: <b>${esc(self.APP_VERSION)}</b> · Online: <b data-online-version>…</b></p>
+    <p class="muted small" data-update-note>Een nieuwe versie komt normaal vanzelf binnen. Lukt dat niet, haal ze dan hier op.</p>
+    <button type="button" class="btn" data-update-now>Nieuwste versie ophalen</button>
+  </section>`;
+
+/** Version on the website, past every cache. */
+async function onlineVersion() {
+  const res = await fetch(`js/version.js?t=${Date.now()}`, { cache: 'no-store' });
+  const m = /APP_VERSION\s*=\s*'([^']+)'/.exec(await res.text());
+  return m ? m[1] : null;
+}
+
+async function checkOnlineVersion(root) {
+  const out = root.querySelector('[data-online-version]');
+  if (!out) return;
+  try {
+    const v = await onlineVersion();
+    out.textContent = v || '?';
+    if (v && v !== self.APP_VERSION) {
+      out.classList.add('text-bad');
+      root.querySelector('[data-update-note]').textContent = 'Er is een nieuwere versie. Klik op de knop om ze nu op te halen.';
+    }
+  } catch {
+    out.textContent = 'geen verbinding';
+  }
+}
+
+/** Throw away the offline copy and load every file fresh from the website. */
+async function updateNow() {
+  // The list of app files is in sw.js; fetch them past the browser cache.
+  const sw = await (await fetch(`sw.js?t=${Date.now()}`, { cache: 'no-store' })).text();
+  const files = [...sw.matchAll(/^\s*'([^']+)',$/gm)].map((m) => m[1]);
+  await Promise.all(files.map((f) => fetch(f, { cache: 'reload' }).catch(() => null)));
+  for (const reg of (await navigator.serviceWorker?.getRegistrations?.()) || []) await reg.unregister();
+  for (const k of await caches.keys()) if (k.startsWith('stroomkringen-')) await caches.delete(k);
+  location.reload();
+}
+
+async function updateClick(b) {
+  if (b.dataset.updateNow === undefined) return false;
+  b.disabled = true;
+  b.textContent = 'Bezig met ophalen…';
+  try {
+    await updateNow();
+  } catch (err) {
+    showToast(`Ophalen lukte niet: ${err.message || 'geen verbinding'}`);
+    b.disabled = false;
+    b.textContent = 'Nieuwste versie ophalen';
+  }
+  return true;
+}
 
 // Connected: everything comes from the Google Sheet.
 
@@ -850,10 +909,12 @@ async function teacherCloud(page, ctx) {
           </div>
           <div class="teacher__col">
             ${deviceCardHtml(s)}
+            ${updateCardHtml()}
             ${wipeCardHtml()}
           </div>
         </div>
       </div>`;
+    checkOnlineVersion(page);
   };
   const load = async () => {
     try {
@@ -901,6 +962,7 @@ async function teacherCloud(page, ctx) {
   page.onclick = async (e) => {
     const b = e.target.closest('button');
     if (!b || b.type === 'submit') return;
+    if (await updateClick(b)) return;
     const d = b.dataset;
     if (d.refresh !== undefined) {
       b.disabled = true;
