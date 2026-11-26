@@ -506,6 +506,20 @@ a.lesson-card[href]:hover { transform: translateY(-3px); border-color: var(--acc
 .cloud-fetch .btn { white-space: nowrap; }
 .progress-table td:first-child { text-align: left; }
 .text-bad { color: var(--bad); font-weight: 650; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.btn-row { display: flex; gap: 8px; }
+.card__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.card__head .card__title { margin-bottom: 0; }
+.card__tools { display: flex; gap: 8px; align-items: center; }
+.card__tools .input { width: auto; min-width: 140px; }
+.card--danger { border-color: var(--bad-soft); }
+.add-class { display: flex; gap: 8px; margin-bottom: 12px; max-width: 520px; }
+.add-class .btn { white-space: nowrap; }
+.class-table { width: 100%; border-collapse: collapse; font-size: var(--fs-s); }
+.class-table th, .class-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.class-table td.who { font-weight: 650; }
+.class-table td.row-actions .btn { margin-left: 4px; }
+.profile-tile--class .profile-tile__name { font-size: var(--fs-l); }
 
 /* ---------- Tooltip, toast ---------- */
 

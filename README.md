@@ -83,8 +83,11 @@ maak je een back-up (export/import als bestand).
 
 ## Centrale opslag (optioneel)
 
-Standaard blijft alles op het toestel. Wil je de voortgang van alle Chromebooks centraal
-zien, koppel dan een Google Sheet: zie [`google/KOPPELING.md`](google/KOPPELING.md).
+Standaard blijft alles op het toestel. Koppel je een Google Sheet, dan staan klassen,
+profielen en sterren centraal en houden de Chromebooks enkel een tijdelijke kopie bij.
+Leerlingen kiezen hun klas en hun profiel, op elk gekoppeld toestel. Vanuit de app beheer
+je de klassen en kan je de sheet volledig wissen om opnieuw te beginnen.
+Zie [`google/KOPPELING.md`](google/KOPPELING.md).
 
 ## Lokaal testen
 
