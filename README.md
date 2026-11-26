@@ -26,6 +26,7 @@ geen account, geen tracking. Gemaakt voor laptops en Chromebooks in liggende sta
 | `js/circuit/parts.js` | Onderdelen: namen, uitleg, aansluitpunten, weerstand |
 | `js/circuit/model.js` | Schakeling als JSON, raster, ongedaan maken/opnieuw |
 | `js/circuit/sim.js` | Simulatie (los van de tekeningen, testbaar in Node) |
+| `js/circuit/explain.js` | Uitleg per onderdeel: waarom het werkt, waarom niet, wanneer het doorbrandt |
 | `js/circuit/draw.js` | SVG-tekeningen van de onderdelen |
 | `js/circuit/editor.js` | Slepen, draden trekken, selecteren, stroombolletjes |
 | `js/lessons/lessons.js` | **De lessen als gegevens** (zie hieronder) |
